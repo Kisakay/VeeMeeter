@@ -35,12 +35,13 @@ fi
 cargo build --release --locked
 cargo test --release --locked
 mkdir -p dist
-id=$( . /etc/os-release && echo "${ID}${VERSION_ID:+-$VERSION_ID}" )
+# Sans tiret : interdit dans une release RPM, ambigu dans une révision Debian.
+id=$( . /etc/os-release && echo "${ID}${VERSION_ID:-}" )
 case $family in
   debian|ubuntu)
     cargo install --locked -q cargo-deb
-    # cargo-deb lit le binaire dans target/release : on lui donne notre target dir.
-    cargo deb --no-build --no-strip --target-dir "$CARGO_TARGET_DIR" -o "dist/" --deb-revision "1~$id"
+    # cargo-deb trouve le binaire via CARGO_TARGET_DIR (exporté plus haut).
+    cargo deb --no-build --no-strip -o "dist/" --deb-revision "1~$id"
     ;;
   fedora)
     cargo install --locked -q cargo-generate-rpm

@@ -144,6 +144,35 @@ Stops the daemon; every VeeMeeter device disappears. With the systemd
 service, prefer `systemctl --user stop veemeeter` (otherwise the service
 manager may restart it, depending on its settings).
 
+## Keyboard shortcuts
+
+`ctl` returns as soon as the daemon has applied the change, so it is made for
+global shortcuts. Bind it in your desktop:
+
+=== "Hyprland"
+
+    ```ini
+    bind = SUPER, M, exec, veemeeter ctl mute hi1
+    bind = SUPER, Prior, exec, veemeeter ctl volume vi1 up
+    bind = SUPER, Next, exec, veemeeter ctl volume vi1 down
+    ```
+
+=== "Sway / i3"
+
+    ```ini
+    bindsym $mod+m exec veemeeter ctl mute hi1
+    bindsym $mod+Prior exec veemeeter ctl volume vi1 up
+    bindsym $mod+Next exec veemeeter ctl volume vi1 down
+    ```
+
+=== "GNOME / KDE"
+
+    Settings → Keyboard → Custom shortcuts → command
+    `veemeeter ctl mute hi1`.
+
+`veemeeter ctl --json status` is handy for status bars (waybar, polybar):
+read `strips[].mute`, `strips[].volume_db`, `strips[].routes`.
+
 ## Exit status
 
 `0` on success. On failure `ctl` prints `veemeeter: <reason>` to stderr and

@@ -224,7 +224,7 @@ PulseMeeter is the project that inspired VeeMeeter. The main differences:
 ## Roadmap
 
 - 📦 Packages and CI runners for **Debian, Ubuntu, Fedora, Arch** (next!)
-- 🌙 Tray icon and global shortcuts
+- 🌙 Tray icon (global shortcuts already work: bind `veemeeter ctl …`, see the [CLI docs](https://veemeter.v.bzh/cli/#keyboard-shortcuts))
 
 Known limits today: VeeMeeter needs a PipeWire session manager
 (WirePlumber), like any PipeWire desktop; a routed hardware output stays
