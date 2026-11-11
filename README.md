@@ -46,6 +46,8 @@ repairs the graph by itself when a device comes and goes.
   window is open.
 - 🔊 **Faders in dB** (−∞ … +12 dB), mute, channel layouts (mono, stereo,
   quad, 5.1, 7.1).
+- 🎚️ **Send levels** — right-click a route to set its own level: music at
+  full volume in your headphones, −12 dB in your virtual mic.
 - 🎛️ **Effects per strip** — 5-band equalizer (live, no reload) and RNNoise
   noise suppression, running inside the daemon with PipeWire's
   `filter-chain`.
@@ -73,7 +75,7 @@ repairs the graph by itself when a device comes and goes.
 |---|---|
 | **A streamer** | Game + music on *Desktop* → A1 (headphones) **and** B1. Mic → B1 only. OBS records **B1**: viewers hear game, music and you; you hear everything but your own voice. |
 | **On calls while gaming** | Game on *Desktop*, Discord on *Voice chat*, both → A1. Two faders: lower the game without touching your friends. |
-| **Sharing music in a voice chat** | Spotify on *Music* → A1 + B1, mic → B1. Pick **Virtual Mic** as your microphone in Discord: friends hear you *and* the music, each at its own level. |
+| **Sharing music in a voice chat** | Spotify on *Music* → A1 + B1, mic → B1, and right-click B1 to send the music at −12 dB. Pick **Virtual Mic** as your microphone in Discord: friends hear you *and* the music, under your voice. |
 | **A podcaster** | Two USB mics as two hardware inputs → B1. Record B1 in your DAW, monitor on A1. |
 | **Switching speakers ↔ headset** | One output per device (A1 speakers, A2 headset). Toggle A1/A2 on an input to move it — no app settings to dig into. |
 | **Hosting a watch party** | Browser on *Desktop* → A1 + B1, so the movie goes out through your virtual mic in sync with your voice. |
@@ -177,6 +179,7 @@ veemeeter ctl route vi2 b1 on       # send Music to the virtual mic
 veemeeter ctl default vi1           # make Desktop the system default output
 veemeeter ctl add b "Stream Mix"    # new virtual output
 veemeeter ctl move 71 vi2           # move application stream 71 to Music
+veemeeter ctl send vi2 b1 -- -12    # Music quieter in the virtual mic only
 veemeeter ctl eq hi1 -- -3,1.5,0,3.5,2   # equalize the mic (80 Hz … 10 kHz)
 veemeeter ctl denoise hi1 on        # RNNoise noise suppression
 veemeeter ctl --json status         # machine-readable state
@@ -221,7 +224,6 @@ PulseMeeter is the project that inspired VeeMeeter. The main differences:
 ## Roadmap
 
 - 📦 Packages and CI runners for **Debian, Ubuntu, Fedora, Arch** (next!)
-- 🎚️ Per-route gain
 - 🌙 Tray icon and global shortcuts
 
 Known limits today: VeeMeeter needs a PipeWire session manager

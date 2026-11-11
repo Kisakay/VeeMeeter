@@ -82,6 +82,9 @@ pub struct Strip {
     /// Sorties alimentées par cette entrée (ids), entrées seulement.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub routes: Vec<String>,
+    /// Niveau d'envoi par sortie routée (dB), absent = 0 dB.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub sends: std::collections::BTreeMap<String, f32>,
     /// Périphérique par défaut du système (strips virtuels seulement).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub primary: bool,
@@ -274,6 +277,12 @@ pub enum Command {
     Primary {
         id: String,
     },
+    /// Niveau d'envoi d'une entrée vers une sortie (dB, 0 = direct).
+    Send {
+        from: String,
+        to: String,
+        db: f32,
+    },
     /// Égaliseur : `enabled` (`None` = inchangé) et/ou nouveaux gains.
     Eq {
         id: String,
@@ -345,6 +354,7 @@ mod tests {
             volume_db: 0.0,
             mute: false,
             routes: vec![],
+            sends: Default::default(),
             primary: false,
             fx: Fx::default(),
         };

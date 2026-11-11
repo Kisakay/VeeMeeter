@@ -172,6 +172,7 @@ mod tests {
             volume_db: 0.0,
             mute: false,
             routes: vec![],
+            sends: Default::default(),
             primary: false,
             fx: Fx { eq: true, gains: [3.0, 0.0, 0.0, -2.5, 0.0], denoise: true },
         }

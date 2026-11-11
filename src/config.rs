@@ -37,6 +37,7 @@ impl Config {
             volume_db: 0.0,
             mute: false,
             routes: vec![],
+            sends: Default::default(),
             primary: false,
             fx: Default::default(),
         };
@@ -102,8 +103,13 @@ impl Config {
             if s.kind.is_input() {
                 s.routes.retain(|r| outputs.contains(r));
                 s.routes.dedup();
+                s.sends.retain(|to, db| outputs.contains(to) && db.is_finite() && db.abs() >= 0.05);
+                for db in s.sends.values_mut() {
+                    *db = clamp_db(*db);
+                }
             } else {
                 s.routes.clear();
+                s.sends.clear();
             }
             let slot = match s.kind {
                 Kind::VirtualIn => Some(0),
@@ -163,6 +169,7 @@ impl Config {
                         volume_db: 0.0,
                         mute: false,
                         routes: vec![],
+                        sends: Default::default(),
                         primary: false,
                         fx: Default::default(),
                     },
@@ -177,6 +184,7 @@ impl Config {
                 }
                 for s in &mut self.strips {
                     s.routes.retain(|r| r != id);
+                    s.sends.remove(id);
                 }
                 Ok(true)
             }
@@ -231,6 +239,26 @@ impl Config {
                     s.routes.retain(|r| r != to);
                 }
                 Ok(true)
+            }
+            Command::Send { from, to, db } => {
+                if !db.is_finite() {
+                    return Err("invalid level".into());
+                }
+                if !self.get(to).is_some_and(|t| !t.kind.is_input()) {
+                    return Err(format!("{to} is not an output"));
+                }
+                let s = self.get_mut(from)?;
+                if !s.kind.is_input() {
+                    return Err(format!("{from} is not an input"));
+                }
+                let db = (clamp_db(*db) * 10.0).round() / 10.0;
+                let before = s.sends.get(to).copied();
+                if db.abs() < 0.05 {
+                    s.sends.remove(to);
+                } else {
+                    s.sends.insert(to.clone(), db);
+                }
+                Ok(s.sends.get(to).copied() != before)
             }
             Command::Primary { id } => {
                 let kind = self.get(id).ok_or_else(|| format!("unknown strip {id}"))?.kind;
@@ -423,6 +451,20 @@ mod tests {
         assert!(c.get("hi1").unwrap().fx.denoise);
         // Les effets par défaut ne sont pas écrits dans le fichier.
         assert!(!toml::to_string(c.get("vi1").unwrap()).unwrap().contains("fx"));
+    }
+
+    #[test]
+    fn send_levels() {
+        let mut c = Config::first_run();
+        assert!(c.apply(&Command::Send { from: "vi1".into(), to: "a1".into(), db: -6.04 }).unwrap());
+        assert_eq!(c.get("vi1").unwrap().sends.get("a1"), Some(&-6.0));
+        assert!(c.apply(&Command::Send { from: "a1".into(), to: "b1".into(), db: 0.0 }).is_err());
+        // 0 dB = route directe, rien n'est stocké.
+        assert!(c.apply(&Command::Send { from: "vi1".into(), to: "a1".into(), db: 0.0 }).unwrap());
+        assert!(c.get("vi1").unwrap().sends.is_empty());
+        c.apply(&Command::Send { from: "vi1".into(), to: "a1".into(), db: -3.0 }).unwrap();
+        c.apply(&Command::Remove { id: "a1".into() }).unwrap();
+        assert!(c.get("vi1").unwrap().sends.is_empty());
     }
 
     #[test]

@@ -31,6 +31,7 @@ enum CtlCmd {
     Rename(Rename),
     Move(MoveApp),
     Eq(EqCmd),
+    Send(SendCmd),
     Denoise(DenoiseCmd),
     Quit(Quit),
 }
@@ -138,6 +139,18 @@ struct EqCmd {
     value: String,
 }
 
+/// Level of one route, in dB (0 = straight through; `-- -6` for negatives).
+#[derive(FromArgs)]
+#[argh(subcommand, name = "send")]
+struct SendCmd {
+    #[argh(positional)]
+    from: String,
+    #[argh(positional)]
+    to: String,
+    #[argh(positional)]
+    db: String,
+}
+
 /// Noise suppression (RNNoise) of a strip: on, off or toggle (default).
 #[derive(FromArgs)]
 #[argh(subcommand, name = "denoise")]
@@ -231,6 +244,10 @@ fn exec(args: CtlArgs) -> Result<()> {
                 list => Command::Eq { id: e.id, enabled: Some(true), gains: Some(parse_gains(list)?) },
             }
         }
+        CtlCmd::Send(c) => {
+            let db = volume_target(0.0, &c.db, None)?;
+            Command::Send { from: c.from, to: c.to, db }
+        }
         CtlCmd::Denoise(d) => {
             if !state.denoise_available {
                 bail!("noise suppression needs the RNNoise LADSPA plugin (librnnoise_ladspa.so), see the docs");
@@ -320,7 +337,17 @@ fn print_status(s: &Snapshot) {
                 x.name,
                 layout_name(&x.channels),
                 if input && !x.routes.is_empty() {
-                    format!("→ {} ", x.routes.iter().map(|r| s.bus_label(r)).collect::<Vec<_>>().join(" "))
+                    format!(
+                        "→ {} ",
+                        x.routes
+                            .iter()
+                            .map(|r| match x.sends.get(r) {
+                                Some(db) => format!("{}({db:+.1})", s.bus_label(r)),
+                                None => s.bus_label(r),
+                            })
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    )
                 } else {
                     String::new()
                 },

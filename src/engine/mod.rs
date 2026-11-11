@@ -43,6 +43,11 @@ fn node_name(id: &str) -> String {
     format!("{PREFIX}{id}")
 }
 
+/// Nœud d'envoi d'une entrée vers une sortie (niveau ≠ 0 dB).
+fn send_name(from: &str, to: &str) -> String {
+    format!("{PREFIX}send.{from}.{to}")
+}
+
 enum Ev {
     Global {
         id: u32,
@@ -59,6 +64,12 @@ enum Ev {
         strip: String,
         volumes: Vec<f32>,
         mute: bool,
+    },
+    /// Volume rapporté par un nœud d'envoi.
+    SendProps {
+        from: String,
+        to: String,
+        volumes: Vec<f32>,
     },
     /// Propriétés complètes d'un nœud tiers (le registre n'en donne qu'une partie).
     NodeInfo {
@@ -121,6 +132,16 @@ struct FxState {
     applied: Option<[f32; 5]>,
 }
 
+/// Nœud d'envoi : un gain entre une entrée et une sortie.
+struct SendNode {
+    proxy: pw::node::Node,
+    _listener: pw::node::NodeListener,
+    channels: Vec<String>,
+    applied: f32,
+    /// Volume réappliqué une fois le nœud annoncé par le registre.
+    seen: bool,
+}
+
 struct OwnedLink {
     proxy: pw::link::Link,
     at: Instant,
@@ -152,6 +173,7 @@ struct Engine {
     watched: HashMap<u32, (pw::node::Node, pw::node::NodeListener)>,
     meters: HashMap<String, Meter>,
     fx: HashMap<String, FxState>,
+    sends: HashMap<(String, String), SendNode>,
     /// Plugin LADSPA RNNoise trouvé au démarrage.
     rnnoise: Option<PathBuf>,
     links: HashMap<(u32, u32), OwnedLink>,
@@ -286,6 +308,7 @@ pub fn run(cfg_path: PathBuf) -> Result<i32> {
         watched: HashMap::new(),
         meters: HashMap::new(),
         fx: HashMap::new(),
+        sends: HashMap::new(),
         rnnoise: fx::find_rnnoise(),
         links: HashMap::new(),
         metadata: None,
@@ -370,6 +393,21 @@ impl Engine {
                 }
             }
             Ev::NodeProps { strip, volumes, mute } => self.on_node_props(&strip, volumes, mute),
+            Ev::SendProps { from, to, volumes } => {
+                // Personne d'autre ne règle un envoi : toute autre valeur (restauration
+                // d'état du gestionnaire de session) est corrigée.
+                let want = self.cfg.get(&from).and_then(|s| s.sends.get(&to)).map(|db| db_to_linear(*db));
+                if let (Some(want), Some(n)) = (want, self.sends.get(&(from, to))) {
+                    if volumes.iter().any(|v| (v - want).abs() > 1e-3) {
+                        let bytes = pod::props(&vec![want; n.channels.len()], false);
+                        n.proxy.set_param(
+                            spa::param::ParamType::Props,
+                            0,
+                            spa::pod::Pod::from_bytes(&bytes).expect("valid pod"),
+                        );
+                    }
+                }
+            }
             Ev::NodeInfo { id, props } => {
                 if self.graph.nodes.contains_key(&id) && props.contains_key("node.name") {
                     self.graph.add_node(id, &|k: &str| props.get(k).cloned());
@@ -479,6 +517,43 @@ impl Engine {
                 }
                 if let Some((volumes, mute)) = param.and_then(pod::parse_props) {
                     w.push(Ev::NodeProps { strip: strip.clone(), volumes, mute });
+                }
+            })
+            .register();
+        node.subscribe_params(&[spa::param::ParamType::Props]);
+        Ok((node, listener))
+    }
+
+    fn create_send(
+        &self,
+        from: &str,
+        to: &str,
+        channels: &[String],
+    ) -> Result<(pw::node::Node, pw::node::NodeListener), pw::Error> {
+        let node = self.core.create_object::<pw::node::Node>(
+            "adapter",
+            &properties! {
+                "factory.name" => "support.null-audio-sink",
+                "node.name" => send_name(from, to),
+                "node.description" => format!("VeeMeeter send {from} → {to}"),
+                "media.class" => "Audio/Sink/Internal",
+                "audio.channels" => channels.len().to_string(),
+                "audio.position" => channels.join(","),
+                "monitor.channel-volumes" => "true",
+                "monitor.passthrough" => "true",
+                "node.virtual" => "true",
+                "object.linger" => "false",
+            },
+        )?;
+        let w = self.waker.clone();
+        let (f, t) = (from.to_string(), to.to_string());
+        let listener = node
+            .add_listener_local()
+            .param(move |_seq, id, _index, _next, param| {
+                if id == spa::param::ParamType::Props {
+                    if let Some((volumes, _)) = param.and_then(pod::parse_props) {
+                        w.push(Ev::SendProps { from: f.clone(), to: t.clone(), volumes });
+                    }
                 }
             })
             .register();
@@ -753,6 +828,64 @@ impl Engine {
             }
         }
 
+        // 1 ter. Envois à niveau propre (nœud seulement si ≠ 0 dB).
+        let wanted_sends: HashMap<(String, String), (Vec<String>, f32)> = strips
+            .iter()
+            .filter(|s| s.kind.is_input())
+            .flat_map(|s| {
+                s.routes
+                    .iter()
+                    .filter_map(|r| s.sends.get(r).map(|db| ((s.id.clone(), r.clone()), (s.channels.clone(), *db))))
+            })
+            .collect();
+        let stale: Vec<(String, String)> = self
+            .sends
+            .iter()
+            .filter(|(k, n)| wanted_sends.get(*k).is_none_or(|w| w.0 != n.channels))
+            .map(|(k, _)| k.clone())
+            .collect();
+        for k in stale {
+            if let Some(n) = self.sends.remove(&k) {
+                let _ = self.core.destroy_object(n.proxy);
+            }
+        }
+        for ((from, to), (channels, db)) in &wanted_sends {
+            let key = (from.clone(), to.clone());
+            if !self.sends.contains_key(&key) {
+                match self.create_send(from, to, channels) {
+                    Ok((proxy, listener)) => {
+                        self.sends.insert(
+                            key.clone(),
+                            SendNode {
+                                proxy,
+                                _listener: listener,
+                                channels: channels.clone(),
+                                applied: f32::NAN,
+                                seen: false,
+                            },
+                        );
+                    }
+                    Err(e) => {
+                        log::warn!("cannot create send {from}→{to}: {e}");
+                        continue;
+                    }
+                }
+            }
+            let present = self.graph.node_by_name(&send_name(from, to)).is_some();
+            if let Some(n) = self.sends.get_mut(&key) {
+                if n.applied != *db || (present && !n.seen) {
+                    let bytes = pod::props(&vec![db_to_linear(*db); channels.len()], false);
+                    n.proxy.set_param(
+                        spa::param::ParamType::Props,
+                        0,
+                        spa::pod::Pod::from_bytes(&bytes).expect("valid pod"),
+                    );
+                    n.applied = *db;
+                    n.seen |= present;
+                }
+            }
+        }
+
         // 2. Périphérique par défaut (une fois par démarrage / par demande).
         if self.synced && self.metadata.is_some() {
             for s in strips.iter().filter(|s| s.primary) {
@@ -884,7 +1017,16 @@ impl Engine {
                 let target = self.cfg.get(r).and_then(|t| Some((t, g.node_by_name(&node_name(r))?)));
                 if let Some((t, tn)) = target {
                     let (t_sink, _) = ends(t, tn.id);
-                    add(routing::match_ports(&our_outs(source), &ports(t_sink, false)), false);
+                    if s.sends.contains_key(r) {
+                        // Par le nœud d'envoi seulement : jamais de lien direct
+                        // pendant sa création (le son passerait trop fort).
+                        if let Some(sn) = g.node_by_name(&send_name(&s.id, r)) {
+                            add(routing::match_ports(&our_outs(source), &ports(sn.id, false)), false);
+                            add(routing::match_ports(&our_outs(sn.id), &ports(t_sink, false)), false);
+                        }
+                    } else {
+                        add(routing::match_ports(&our_outs(source), &ports(t_sink, false)), false);
+                    }
                 }
             }
             // Mesure après les effets (pour une sortie B, le nœud lui-même).

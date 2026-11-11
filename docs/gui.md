@@ -37,6 +37,11 @@ VU meter
 :   One button per output. Lit = this input is sent to that output.
     Hover a button to see the output's name.
 
+**Right-click an A/B button**
+:   Sets the *send level* of that route only (−∞ … +12 dB), e.g. music
+    quieter in your virtual mic than in your headphones. The button then
+    shows the level (`B1 -12`).
+
 **default** *(virtual strips only)*
 :   Makes the strip the system default: a virtual input becomes the default
     **output** (apps play there), a virtual output becomes the default

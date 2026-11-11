@@ -154,6 +154,8 @@ struct App {
     mimi: Mimi,
     /// Valeur du fader pendant un glissé (l'écho du daemon arrive après).
     dragging: HashMap<String, f32>,
+    /// Niveaux d'envoi pendant un glissé.
+    send_drag: HashMap<(String, String), f32>,
     /// Gains d'égaliseur pendant un glissé.
     eq_drag: HashMap<String, [f32; 5]>,
     meters: HashMap<(String, usize), MeterView>,
@@ -169,6 +171,7 @@ impl App {
             mimi,
             dragging: HashMap::new(),
             eq_drag: HashMap::new(),
+            send_drag: HashMap::new(),
             meters: HashMap::new(),
             rename: HashMap::new(),
             show_apps: true,
@@ -468,19 +471,27 @@ impl App {
                             for out in st.strips.iter().filter(|o| !o.strip.kind.is_input()) {
                                 let on = x.routes.contains(&out.strip.id);
                                 let c = if out.strip.kind.is_hardware() { T.hw } else { T.virt };
+                                let send = x.sends.get(&out.strip.id).copied();
+                                let label = match send {
+                                    Some(db) if db <= MIN_DB => format!("{} −∞", st.bus_label(&out.strip.id)),
+                                    Some(db) => format!("{} {db:+.0}", st.bus_label(&out.strip.id)),
+                                    None => st.bus_label(&out.strip.id),
+                                };
                                 let b = ui
                                     .add(
-                                        egui::Button::new(
-                                            RichText::new(st.bus_label(&out.strip.id)).strong().color(if on {
-                                                T.on_accent
-                                            } else {
-                                                c
-                                            }),
-                                        )
+                                        egui::Button::new(RichText::new(label).strong().color(if on {
+                                            T.on_accent
+                                        } else {
+                                            c
+                                        }))
                                         .fill(if on { c } else { T.card_hi })
                                         .min_size(vec2(36.0, 24.0)),
                                     )
-                                    .on_hover_text(format!("Send to {}", out.strip.name));
+                                    .on_hover_text(format!(
+                                        "Send to {} — right-click for the send level",
+                                        out.strip.name
+                                    ));
+                                b.context_menu(|ui| self.send_menu(ui, x, &out.strip));
                                 if b.clicked() {
                                     self.send(Command::Route {
                                         from: x.id.clone(),
@@ -521,6 +532,30 @@ impl App {
                 }
             },
         );
+    }
+
+    /// Niveau d'envoi d'une entrée vers une sortie (clic droit sur la route).
+    fn send_menu(&mut self, ui: &mut Ui, from: &Strip, to: &Strip) {
+        ui.set_min_width(230.0);
+        ui.label(RichText::new(format!("{} → {}", from.name, to.name)).strong().color(T.text));
+        let key = (from.id.clone(), to.id.clone());
+        let current = from.sends.get(&to.id).copied().unwrap_or(0.0);
+        let mut db = self.send_drag.get(&key).copied().unwrap_or(current);
+        let before = db;
+        ui.spacing_mut().slider_width = 200.0;
+        let r = ui.add(egui::Slider::new(&mut db, MIN_DB..=MAX_DB).suffix(" dB").fixed_decimals(1));
+        if r.dragged() {
+            self.send_drag.insert(key, db);
+        } else {
+            self.send_drag.remove(&key);
+        }
+        if ui.button("Back to 0 dB").clicked() {
+            db = 0.0;
+        }
+        ui.label(RichText::new("Only this route: the input's fader still applies.").small().color(T.muted));
+        if (db - before).abs() > 0.05 {
+            self.send(Command::Send { from: from.id.clone(), to: to.id.clone(), db });
+        }
     }
 
     fn fx_menu(&mut self, ui: &mut Ui, st: &Snapshot, s: &StripState) {

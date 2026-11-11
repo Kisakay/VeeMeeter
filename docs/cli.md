@@ -110,6 +110,16 @@ veemeeter ctl move 87 vi2        # move app stream #87 to "Voice chat"
 
 `<app>` is the numeric id shown under *APPLICATIONS* in `ctl status`.
 
+### `send <from> <to> <db>`
+
+```sh
+veemeeter ctl send vi2 b1 -- -12     # Music 12 dB quieter in the virtual mic only
+veemeeter ctl send vi2 b1 0          # back to a straight route
+```
+
+Level of one route (a *send*), −60 … +12 dB, on top of the input's fader.
+The level is kept while the route is off.
+
 ### `eq <id> [on|off|toggle|<gains>]`
 
 ```sh

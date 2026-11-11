@@ -23,7 +23,7 @@ STATE = {
         strip("hi1", "hardware_in", "Microphone", ["b1"], "alsa_input.usb-mic", ["MONO"], 2.5,
               fx={"eq": True, "gains": [-3.0, 1.5, 0.0, 3.5, 2.0], "denoise": True}),
         strip("vi1", "virtual_in", "Desktop", ["a1"], default=True),
-        strip("vi2", "virtual_in", "Music", ["a1", "b1"], db=-9.0),
+        dict(strip("vi2", "virtual_in", "Music", ["a1", "b1"], db=-9.0), sends={"b1": -12.0}),
         strip("vi3", "virtual_in", "Voice chat", ["a1"], db=-3.5),
         strip("a1", "hardware_out", "Headphones", device="alsa_output.analog"),
         strip("a2", "hardware_out", "Stream PC", device="alsa_output.hdmi", db=-6.0, mute=True),

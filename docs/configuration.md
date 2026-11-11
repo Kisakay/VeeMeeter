@@ -75,6 +75,7 @@ primary = true
 | `routes` | list | inputs | Ids of the outputs this input is sent to. |
 | `primary` | bool | virtual | System default device. At most one virtual input and one virtual output. |
 
+| `sends` | table | inputs | Send level per routed output in dB, e.g. `sends = { b1 = -12.0 }`. Missing = 0 dB (straight link). |
 | `fx` | table | any | Effects, see below. Omitted while everything is off. |
 
 ### Effects (`[strip.fx]`)
