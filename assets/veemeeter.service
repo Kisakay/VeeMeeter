@@ -1,6 +1,6 @@
 [Unit]
 Description=VeeMeeter audio mixer and router
-Documentation=https://kisakay.github.io/VeeMeeter/
+Documentation=https://veemeter.v.bzh/
 # Le moteur vit dans le graphe PipeWire : il démarre et s'arrête avec lui.
 After=pipewire.service wireplumber.service
 Requires=pipewire.service

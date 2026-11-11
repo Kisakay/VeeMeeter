@@ -1,5 +1,5 @@
 site_name: VeeMeeter
-site_url: https://kisakay.github.io/VeeMeeter/
+site_url: https://veemeter.v.bzh/
 site_description: A cute, native PipeWire virtual audio mixer and router for Linux, written in Rust.
 site_author: VeeMeeter contributors
 repo_url: https://github.com/Kisakay/VeeMeeter

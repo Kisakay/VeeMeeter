@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths-ignore: ["docs/**", "branding/**", "mkdocs.yml", "*.md"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nix:
+    name: Nix (flake check + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - run: nix flake check --print-build-logs
+      - run: nix build --print-build-logs .#veemeeter
+      - run: ./result/bin/veemeeter --help
+
+  distro:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "Debian 13",       image: "debian:trixie",   family: debian }
+          - { name: "Ubuntu 24.04 LTS", image: "ubuntu:24.04",   family: ubuntu }
+          - { name: "Ubuntu latest",   image: "ubuntu:rolling",  family: ubuntu }
+          - { name: "Fedora latest",   image: "fedora:latest",   family: fedora }
+          - { name: "Arch Linux",      image: "archlinux:latest", family: arch }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/${{ matrix.family }}
+          key: ${{ matrix.image }}-${{ hashFiles('Cargo.lock') }}
+      - name: Build, test, package
+        run: packaging/build.sh ${{ matrix.family }}
+        env:
+          CARGO_BUILD_JOBS: "4"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: veemeeter-${{ matrix.family }}-${{ strategy.job-index }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [nix, distro]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" --title "VeeMeeter $GITHUB_REF_NAME" --generate-notes

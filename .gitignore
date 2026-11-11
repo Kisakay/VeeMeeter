@@ -27,3 +27,4 @@ rustc-ice-*.txt
 site/
 result
 result-*
+dist/
