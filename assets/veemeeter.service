@@ -1,0 +1,22 @@
+[Unit]
+Description=VeeMeeter audio mixer and router
+Documentation=https://kisakay.github.io/VeeMeeter/
+# Le moteur vit dans le graphe PipeWire : il démarre et s'arrête avec lui.
+After=pipewire.service wireplumber.service
+Requires=pipewire.service
+PartOf=pipewire.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/veemeeter daemon
+Restart=on-failure
+RestartSec=2
+# Le daemon ne fait qu'orchestrer PipeWire : aucun accès réseau ni privilège.
+NoNewPrivileges=true
+PrivateNetwork=true
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=pipewire.service

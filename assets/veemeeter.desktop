@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=VeeMeeter
+GenericName=Audio Mixer
+Comment=Mix and route audio between apps, microphones and outputs (PipeWire)
+Exec=veemeeter
+Icon=veemeeter
+Terminal=false
+Categories=AudioVideo;Audio;Mixer;
+Keywords=pipewire;mixer;routing;voicemeeter;pulsemeeter;virtual;microphone;
+StartupWMClass=veemeeter
