@@ -22,11 +22,14 @@ pub enum Kind {
     VirtualIn,
     HardwareOut,
     VirtualOut,
+    /// Câble virtuel : un logiciel y joue, un autre l'enregistre
+    /// (comme VB-Cable). Peut aussi être routé vers les sorties pour l'écouter.
+    Cable,
 }
 
 impl Kind {
     pub fn is_input(self) -> bool {
-        matches!(self, Kind::HardwareIn | Kind::VirtualIn)
+        matches!(self, Kind::HardwareIn | Kind::VirtualIn | Kind::Cable)
     }
 
     pub fn is_hardware(self) -> bool {
@@ -40,6 +43,7 @@ impl Kind {
             Kind::VirtualIn => "vi",
             Kind::HardwareOut => "a",
             Kind::VirtualOut => "b",
+            Kind::Cable => "c",
         }
     }
 
@@ -49,6 +53,7 @@ impl Kind {
             Kind::VirtualIn => "Virtual input",
             Kind::HardwareOut => "Hardware output",
             Kind::VirtualOut => "Virtual output",
+            Kind::Cable => "Virtual cable",
         }
     }
 
@@ -58,6 +63,7 @@ impl Kind {
             "vi" | "virtual-in" | "virtual_in" => Kind::VirtualIn,
             "a" | "hardware-out" | "hardware_out" => Kind::HardwareOut,
             "b" | "virtual-out" | "virtual_out" => Kind::VirtualOut,
+            "c" | "cable" => Kind::Cable,
             _ => return None,
         })
     }

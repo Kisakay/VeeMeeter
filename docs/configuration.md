@@ -66,7 +66,7 @@ primary = true
 | Key | Type | Applies to | Meaning |
 |---|---|---|---|
 | `id` | string | all | Unique id, lowercase letters and digits (≤ 16): `hi1`, `vi1`, `a1`, `b1`… Used by `ctl` and in `routes`. |
-| `kind` | string | all | `hardware_in`, `virtual_in`, `hardware_out` or `virtual_out`. |
+| `kind` | string | all | `hardware_in`, `virtual_in`, `cable`, `hardware_out` or `virtual_out`. |
 | `name` | string | all | Display name, also shown as the device name in other apps (≤ 64 characters). |
 | `device` | string | hardware | PipeWire `node.name` of the real device. Missing = no device. |
 | `channels` | list | all | Channel positions. Default `["FL", "FR"]`. |

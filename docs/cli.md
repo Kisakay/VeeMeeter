@@ -81,6 +81,7 @@ microphone (virtual output).
 ```sh
 veemeeter ctl add vi Music
 veemeeter ctl add b Stream
+veemeeter ctl add c "OBS to Discord"
 veemeeter ctl add a Headset --device alsa_output.usb-…analog-stereo
 veemeeter ctl add hi "Line in" --layout mono
 ```
@@ -91,6 +92,7 @@ veemeeter ctl add hi "Line in" --layout mono
 | `vi` | virtual input |
 | `a` | hardware output (A bus) |
 | `b` | virtual output (B bus) |
+| `c` | virtual cable (one app plays into it, another records from it) |
 
 `--device` takes a PipeWire node name (see `ctl status`, *DEVICES*).
 `--layout` is one of `mono`, `stereo`, `quad`, `5.1`, `7.1` (default stereo).

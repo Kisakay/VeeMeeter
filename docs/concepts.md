@@ -22,6 +22,22 @@ Every column in the mixer is a **strip**. There are four kinds:
 Hardware inputs are wrapped in an internal, hidden node. Moving the fader of
 `hi1` changes VeeMeeter's gain, never your system microphone volume.
 
+## Virtual cables
+
+A **cable** connects one program's output straight to another program's
+input, like VB-Cable on Windows. Adding one (**+ Add → Virtual cable**, or
+`veemeeter ctl add c "OBS to Discord"`) creates two devices:
+
+| Device | Kind | Use it as… |
+|---|---|---|
+| **OBS to Discord** | output (sink) | the *output* of the program that sends the audio |
+| **OBS to Discord (output)** | input (virtual microphone) | the *microphone* of the program that receives it |
+
+The cable has its own fader, mute, VU meter and effects, and its A/B buttons
+let you also listen to it (or mix it into a virtual mic). In the
+*Applications* panel, picking a cable sends a playing app into it and
+plugs a recording app onto its output side.
+
 ## Routing
 
 Each **input** has one toggle button per **output** (`A1`, `A2`, `B1`…).

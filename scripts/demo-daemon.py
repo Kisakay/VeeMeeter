@@ -25,6 +25,7 @@ STATE = {
         strip("vi1", "virtual_in", "Desktop", ["a1"], default=True),
         dict(strip("vi2", "virtual_in", "Music", ["a1", "b1"], db=-9.0), sends={"b1": -12.0}),
         strip("vi3", "virtual_in", "Voice chat", ["a1"], db=-3.5),
+        strip("c1", "cable", "OBS to Discord"),
         strip("a1", "hardware_out", "Headphones", device="alsa_output.analog"),
         strip("a2", "hardware_out", "Stream PC", device="alsa_output.hdmi", db=-6.0, mute=True),
         strip("b1", "virtual_out", "Virtual Mic", default=True),
@@ -54,7 +55,7 @@ STATE = {
 
 # Niveaux crête de base (amplitude) par strip, modulés dans le temps.
 BASE = {"hi1": [0.42], "vi1": [0.20, 0.18], "vi2": [0.80, 0.74], "vi3": [0.33, 0.33],
-        "a1": [0.62, 0.58], "a2": [0.0, 0.0], "b1": [0.55, 0.52]}
+        "c1": [0.46, 0.44], "a1": [0.62, 0.58], "a2": [0.0, 0.0], "b1": [0.55, 0.52]}
 
 def serve(conn):
     f = conn.makefile("r")

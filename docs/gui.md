@@ -55,6 +55,11 @@ Device picker *(hardware strips only)*
 :   Rename, channel layout (*Mono*, *Stereo*, *Quad*, *5.1*, *7.1*, or
     *Match device*), move the strip left/right, *Reset volume (0 dB)*, *Remove*.
 
+## Cables
+
+Cables (**+ Add → Virtual cable**) get their own **CABLES** column between
+inputs and outputs. See [Virtual cables](concepts.md#virtual-cables).
+
 ## Effects (FX)
 
 ![Equalizer and noise suppression panel](assets/screenshots/fx-menu.png){ .vm-shot loading=lazy }

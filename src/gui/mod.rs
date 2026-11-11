@@ -36,7 +36,7 @@ pub fn run(spawn: bool) -> i32 {
         viewport: egui::ViewportBuilder::default()
             .with_title("VeeMeeter")
             .with_app_id("veemeeter")
-            .with_inner_size([1420.0, 740.0])
+            .with_inner_size([1600.0, 740.0])
             .with_min_inner_size([520.0, 420.0]),
         ..Default::default()
     };
@@ -290,7 +290,7 @@ impl App {
             ui.add_space(16.0);
             ui.add_enabled_ui(connected, |ui| {
                 ui.menu_button(RichText::new("+  Add").strong().color(T.accent), |ui| {
-                    for kind in [Kind::HardwareIn, Kind::VirtualIn, Kind::HardwareOut, Kind::VirtualOut] {
+                    for kind in [Kind::HardwareIn, Kind::VirtualIn, Kind::Cable, Kind::HardwareOut, Kind::VirtualOut] {
                         if ui.button(kind.label()).clicked() {
                             self.add_strip(kind, st);
                             ui.close();
@@ -326,6 +326,7 @@ impl App {
         let name = match kind {
             Kind::HardwareIn => format!("Input {n}"),
             Kind::VirtualIn => format!("Virtual {n}"),
+            Kind::Cable => format!("Cable {n}"),
             Kind::HardwareOut => format!("Output {n}"),
             Kind::VirtualOut => format!("Virtual Mic {n}"),
         };
@@ -343,12 +344,21 @@ impl App {
     fn mixer(&mut self, ui: &mut Ui, st: &Snapshot) {
         egui::ScrollArea::horizontal().auto_shrink([false, false]).show(ui, |ui| {
             ui.horizontal_top(|ui| {
-                for (title, input) in [("INPUTS", true), ("OUTPUTS", false)] {
+                let in_group = |k: Kind, g: usize| match g {
+                    0 => matches!(k, Kind::HardwareIn | Kind::VirtualIn),
+                    1 => k == Kind::Cable,
+                    _ => !k.is_input(),
+                };
+                let has_cables = st.strips.iter().any(|s| s.strip.kind == Kind::Cable);
+                for (g, title) in [(0, "INPUTS"), (1, "CABLES"), (2, "OUTPUTS")] {
+                    if g == 1 && !has_cables {
+                        continue;
+                    }
                     ui.vertical(|ui| {
                         ui.label(RichText::new(title).size(13.0).strong().color(T.muted));
                         ui.horizontal_top(|ui| {
                             let strips: Vec<&StripState> =
-                                st.strips.iter().filter(|s| s.strip.kind.is_input() == input).collect();
+                                st.strips.iter().filter(|s| in_group(s.strip.kind, g)).collect();
                             if strips.is_empty() {
                                 ui.label(RichText::new("Nothing here yet, use + Add").color(T.muted));
                             }
@@ -357,7 +367,7 @@ impl App {
                             }
                         });
                     });
-                    if input {
+                    if g < 2 {
                         ui.add_space(10.0);
                         ui.separator();
                         ui.add_space(10.0);
@@ -369,7 +379,11 @@ impl App {
 
     fn strip_card(&mut self, ui: &mut Ui, st: &Snapshot, s: &StripState) {
         let x = &s.strip;
-        let kind_color = if x.kind.is_hardware() { T.hw } else { T.virt };
+        let kind_color = match x.kind {
+            Kind::Cable => T.accent3,
+            k if k.is_hardware() => T.hw,
+            _ => T.virt,
+        };
         egui::Frame::new()
             .fill(T.card)
             .corner_radius(CornerRadius::same(14))
@@ -388,12 +402,18 @@ impl App {
                                 .background_color(kind_color),
                         );
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.menu_button(RichText::new("•••").color(T.muted), |ui| self.strip_menu(ui, st, s));
+                            // Ces popups contiennent des champs et des curseurs : elles ne se
+                            // ferment qu'au clic à l'extérieur (un clic dans le champ de
+                            // renommage fermait le menu).
+                            egui::containers::menu::MenuButton::new(RichText::new("•••").color(T.muted))
+                                .config(sticky_menu())
+                                .ui(ui, |ui| self.strip_menu(ui, st, s));
                             let active = x.fx.eq || (x.fx.denoise && st.denoise_available);
                             let label =
                                 RichText::new("FX").small().strong().color(if active { T.on_accent } else { T.muted });
                             let fx_button = egui::Button::new(label).fill(if active { T.accent3 } else { T.card_hi });
                             egui::containers::menu::MenuButton::from_button(fx_button)
+                                .config(sticky_menu())
                                 .ui(ui, |ui| self.fx_menu(ui, st, s))
                                 .0
                                 .on_hover_text("Equalizer and noise suppression");
@@ -402,7 +422,11 @@ impl App {
                     ui.add(egui::Label::new(RichText::new(&x.name).size(15.0).strong().color(T.text)).truncate());
                     let sub = format!(
                         "{} · {}",
-                        if x.kind.is_hardware() { "hardware" } else { "virtual" },
+                        match x.kind {
+                            Kind::Cable => "cable",
+                            k if k.is_hardware() => "hardware",
+                            _ => "virtual",
+                        },
                         layout_name(&x.channels)
                     );
                     ui.label(RichText::new(sub).small().color(T.muted));
@@ -443,7 +467,7 @@ impl App {
                         if mute.clicked() {
                             self.send(Command::Mute { id: x.id.clone(), mute: Some(!x.mute) });
                         }
-                        if !x.kind.is_hardware() {
+                        if !x.kind.is_hardware() && x.kind != Kind::Cable {
                             let star = ui.add(
                                 egui::Button::new(
                                     RichText::new(if s.is_default { "DEFAULT" } else { "default" })
@@ -491,7 +515,9 @@ impl App {
                                         "Send to {} — right-click for the send level",
                                         out.strip.name
                                     ));
-                                b.context_menu(|ui| self.send_menu(ui, x, &out.strip));
+                                egui::Popup::context_menu(&b)
+                                    .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                                    .show(|ui| self.send_menu(ui, x, &out.strip));
                                 if b.clicked() {
                                     self.send(Command::Route {
                                         from: x.id.clone(),
@@ -772,7 +798,8 @@ impl App {
                         |ui| {
                             let kind = if a.playback { Kind::VirtualIn } else { Kind::VirtualOut };
                             ui.label(RichText::new("VeeMeeter").small().color(T.muted));
-                            for s in st.strips.iter().filter(|s| s.strip.kind == kind) {
+                            // Un câble se joue ET s'enregistre : proposé dans les deux sens.
+                            for s in st.strips.iter().filter(|s| s.strip.kind == kind || s.strip.kind == Kind::Cable) {
                                 let sel = a.target_strip.as_deref() == Some(&s.strip.id);
                                 if ui.selectable_label(sel, &s.strip.name).clicked() {
                                     self.send(Command::MoveApp { app: a.id, to: s.strip.id.clone() });
@@ -832,4 +859,9 @@ fn fixed(ui: &mut Ui, width: f32, widget: impl egui::Widget) -> egui::Response {
         ui.add(widget)
     })
     .inner
+}
+
+/// Menu qui reste ouvert tant qu'on clique dedans (champs, curseurs).
+fn sticky_menu() -> egui::containers::menu::MenuConfig {
+    egui::containers::menu::MenuConfig::new().close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
 }

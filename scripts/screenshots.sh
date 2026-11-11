@@ -18,7 +18,7 @@ shoot() { # shoot <fichier> <démon:0|1> [clic x y]
   local file=$1 daemon=$2 click=${3:-}
   rm -f "$RT/veemeeter.sock"
   if [ "$daemon" = 1 ]; then XDG_RUNTIME_DIR=$RT python3 scripts/demo-daemon.py & sleep 0.5; fi
-  "$XVFB/xvfb-run" -a -s "-screen 0 1420x740x24" bash -c "
+  "$XVFB/xvfb-run" -a -s "-screen 0 1600x740x24" bash -c "
     unset WAYLAND_DISPLAY
     export XDG_RUNTIME_DIR=$RT LD_LIBRARY_PATH=$LIBS:/run/opengl-driver/lib
     ./target/debug/veemeeter gui --no-spawn >/dev/null 2>&1 &

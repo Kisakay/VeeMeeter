@@ -262,8 +262,8 @@ impl Config {
             }
             Command::Primary { id } => {
                 let kind = self.get(id).ok_or_else(|| format!("unknown strip {id}"))?.kind;
-                if kind.is_hardware() {
-                    return Err("only virtual strips can be the system default".into());
+                if kind.is_hardware() || kind == Kind::Cable {
+                    return Err("only virtual inputs and outputs can be the system default".into());
                 }
                 let mut changed = false;
                 for s in self.strips.iter_mut().filter(|s| s.kind == kind) {
@@ -465,6 +465,18 @@ mod tests {
         c.apply(&Command::Send { from: "vi1".into(), to: "a1".into(), db: -3.0 }).unwrap();
         c.apply(&Command::Remove { id: "a1".into() }).unwrap();
         assert!(c.get("vi1").unwrap().sends.is_empty());
+    }
+
+    #[test]
+    fn cables_route_like_inputs() {
+        let mut c = Config::first_run();
+        c.apply(&Command::Add { kind: Kind::Cable, name: "OBS → Discord".into(), device: None, channels: None })
+            .unwrap();
+        let ids: Vec<_> = c.strips.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, ["hi1", "vi1", "vi2", "c1", "a1", "b1"]);
+        assert!(c.apply(&Command::Route { from: "c1".into(), to: "a1".into(), on: Some(true) }).unwrap());
+        assert!(c.apply(&Command::Primary { id: "c1".into() }).is_err());
+        assert!(c.apply(&Command::Route { from: "vi1".into(), to: "c1".into(), on: Some(true) }).is_err());
     }
 
     #[test]

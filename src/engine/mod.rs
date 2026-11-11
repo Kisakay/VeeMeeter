@@ -43,6 +43,13 @@ fn node_name(id: &str) -> String {
     format!("{PREFIX}{id}")
 }
 
+/// Côté « sortie » d'un câble : une source virtuelle que les logiciels
+/// enregistrent. (Un seul nœud `Audio/Duplex` ne suffit pas : WirePlumber
+/// ne le propose pas comme source aux flux d'enregistrement.)
+fn cable_out_name(id: &str) -> String {
+    format!("{PREFIX}{id}.out")
+}
+
 /// Nœud d'envoi d'une entrée vers une sortie (niveau ≠ 0 dB).
 fn send_name(from: &str, to: &str) -> String {
     format!("{PREFIX}send.{from}.{to}")
@@ -177,6 +184,8 @@ struct Engine {
     meters: HashMap<String, Meter>,
     fx: HashMap<String, FxState>,
     sends: HashMap<(String, String), SendNode>,
+    /// Côtés « sortie » des câbles : (proxy, canaux, nom).
+    cable_outs: HashMap<String, (pw::node::Node, Vec<String>, String)>,
     /// Plugin LADSPA RNNoise trouvé au démarrage.
     rnnoise: Option<PathBuf>,
     links: HashMap<(u32, u32), OwnedLink>,
@@ -313,6 +322,7 @@ pub fn run(cfg_path: PathBuf) -> Result<i32> {
         meters: HashMap::new(),
         fx: HashMap::new(),
         sends: HashMap::new(),
+        cable_outs: HashMap::new(),
         rnnoise: fx::find_rnnoise(),
         links: HashMap::new(),
         metadata: None,
@@ -505,7 +515,8 @@ impl Engine {
         let class = match s.kind {
             // Nœuds internes : invisibles dans pavucontrol et les menus du bureau.
             Kind::HardwareIn | Kind::HardwareOut => "Audio/Sink/Internal",
-            Kind::VirtualIn => "Audio/Sink",
+            // Câble : côté « entrée » ; son côté « sortie » est un second nœud.
+            Kind::VirtualIn | Kind::Cable => "Audio/Sink",
             Kind::VirtualOut => "Audio/Source/Virtual",
         };
         let description =
@@ -735,7 +746,13 @@ impl Engine {
         if !node.class.starts_with("Stream/") || node.name.starts_with(PREFIX) {
             return Err("not an application stream".into());
         }
-        let target_name = if self.cfg.get(to).is_some() { node_name(to) } else { to.to_string() };
+        let recording = node.class == "Stream/Input/Audio";
+        let target_name = match self.cfg.get(to) {
+            // On joue dans un câble par son entrée, on l'enregistre par sa sortie.
+            Some(s) if s.kind == Kind::Cable && recording => cable_out_name(to),
+            Some(_) => node_name(to),
+            None => to.to_string(),
+        };
         let target = self.graph.node_by_name(&target_name).ok_or("target is not available")?;
         let serial = target.serial.ok_or("target has no serial")?;
         let (_, meta, _) = self.metadata.as_ref().ok_or("PipeWire default metadata is not available")?;
@@ -822,6 +839,51 @@ impl Engine {
                     self.apply_volume(&s.id);
                 }
                 Err(e) => log::warn!("cannot create node for {}: {e}", s.id),
+            }
+        }
+
+        // 1 a. Côté « sortie » des câbles.
+        let want_outs: HashMap<String, (Vec<String>, String)> = strips
+            .iter()
+            .filter(|s| s.kind == Kind::Cable)
+            .map(|s| (s.id.clone(), (s.channels.clone(), s.name.clone())))
+            .collect();
+        let stale: Vec<String> = self
+            .cable_outs
+            .iter()
+            .filter(|(id, (_, ch, name))| want_outs.get(*id) != Some(&(ch.clone(), name.clone())))
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in stale {
+            if let Some((proxy, ..)) = self.cable_outs.remove(&id) {
+                let _ = self.core.destroy_object(proxy);
+            }
+        }
+        for (id, (channels, name)) in &want_outs {
+            if self.cable_outs.contains_key(id) {
+                continue;
+            }
+            let created = self.core.create_object::<pw::node::Node>(
+                "adapter",
+                &properties! {
+                    "factory.name" => "support.null-audio-sink",
+                    "node.name" => cable_out_name(id),
+                    "node.description" => format!("{name} (output)"),
+                    "node.nick" => format!("{name} (output)"),
+                    "media.class" => "Audio/Source/Virtual",
+                    "audio.channels" => channels.len().to_string(),
+                    "audio.position" => channels.join(","),
+                    "node.virtual" => "true",
+                    "object.linger" => "false",
+                    "device.icon-name" => "audio-input-microphone",
+                    "veemeeter.strip" => id.as_str(),
+                },
+            );
+            match created {
+                Ok(proxy) => {
+                    self.cable_outs.insert(id.clone(), (proxy, channels.clone(), name.clone()));
+                }
+                Err(e) => log::warn!("cannot create the output of cable {id}: {e}"),
             }
         }
 
@@ -1027,6 +1089,12 @@ impl Engine {
         for s in &self.cfg.strips {
             let Some(node) = g.node_by_name(&node_name(&s.id)) else { continue };
             let (sink, source) = ends(s, node.id);
+            // Câble : entrée → (effets) → côté « sortie » enregistré par les logiciels.
+            if s.kind == Kind::Cable {
+                if let Some(out) = g.node_by_name(&cable_out_name(&s.id)) {
+                    add(routing::match_ports(&our_outs(source), &ports(out.id, false)), false);
+                }
+            }
             if let Some((fi, fo)) = fx_nodes(&s.id) {
                 if s.kind == Kind::VirtualOut {
                     add(routing::match_ports(&our_outs(fo), &ports(node.id, false)), false);
@@ -1103,8 +1171,11 @@ impl Engine {
             })
             .collect();
         devices.sort_by(|a, b| a.description.cmp(&b.description));
-        let strip_of =
-            |name: &str| name.strip_prefix(PREFIX).filter(|id| self.cfg.get(id).is_some()).map(str::to_string);
+        let strip_of = |name: &str| {
+            let id = name.strip_prefix(PREFIX)?;
+            let id = id.strip_suffix(".out").unwrap_or(id);
+            self.cfg.get(id).is_some().then(|| id.to_string())
+        };
         let mut apps: Vec<App> = g
             .nodes
             .values()

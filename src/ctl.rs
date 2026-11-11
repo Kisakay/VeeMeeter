@@ -85,7 +85,7 @@ struct Default {
     id: String,
 }
 
-/// Add a strip: kind is hi (hardware input), vi (virtual input), a (hardware output) or b (virtual output).
+/// Add a strip: kind is hi (hardware input), vi (virtual input), c (virtual cable), a (hardware output) or b (virtual output).
 #[derive(FromArgs)]
 #[argh(subcommand, name = "add")]
 struct Add {
@@ -228,7 +228,7 @@ fn exec(args: CtlArgs) -> Result<()> {
         CtlCmd::Route(r) => Command::Route { from: r.from, to: r.to, on: toggle(&r.state)? },
         CtlCmd::Default(d) => Command::Primary { id: d.id },
         CtlCmd::Add(a) => {
-            let kind = Kind::parse(&a.kind).ok_or_else(|| anyhow!("kind must be hi, vi, a or b"))?;
+            let kind = Kind::parse(&a.kind).ok_or_else(|| anyhow!("kind must be hi, vi, c, a or b"))?;
             let channels = match a.layout.as_deref() {
                 None => None,
                 Some(l) => Some(
