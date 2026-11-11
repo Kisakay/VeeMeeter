@@ -32,16 +32,18 @@ to Mimi! (｡•̀ᴗ-)✧
 
 | Distribution | File | Command |
 |---|---|---|
-| Debian 13 | `veemeeter_0.1.0-1~debian13_amd64.deb` | `sudo apt install ./veemeeter_0.1.0-1~debian13_amd64.deb` |
-| Ubuntu 24.04 LTS | `veemeeter_0.1.0-1~ubuntu24.04_amd64.deb` | `sudo apt install ./veemeeter_0.1.0-1~ubuntu24.04_amd64.deb` |
-| Ubuntu (latest) | `veemeeter_0.1.0-1~ubuntu*_amd64.deb` | `sudo apt install ./veemeeter_0.1.0-1~ubuntu*_amd64.deb` |
-| Fedora | `veemeeter-0.1.0-1.fedora*.x86_64.rpm` | `sudo dnf install ./veemeeter-0.1.0-1.fedora*.x86_64.rpm` |
+| Debian 13 | `veemeeter_0.1.0-1.debian13_amd64.deb` | `sudo apt install ./veemeeter_0.1.0-1.debian13_amd64.deb` |
+| Ubuntu 24.04 LTS | `veemeeter_0.1.0-1.ubuntu24.04_amd64.deb` | `sudo apt install ./veemeeter_0.1.0-1.ubuntu24.04_amd64.deb` |
+| Ubuntu (latest) | `veemeeter_0.1.0-1.ubuntu26.10_amd64.deb` | `sudo apt install ./veemeeter_0.1.0-1.ubuntu26.10_amd64.deb` |
+| Fedora | `veemeeter-0.1.0-1.fedora45.x86_64.rpm` | `sudo dnf install ./veemeeter-0.1.0-1.fedora45.x86_64.rpm` |
 | Arch Linux | `veemeeter-0.1.0-arch-x86_64.tar.gz` | `sudo tar -xzf veemeeter-0.1.0-arch-x86_64.tar.gz -C /` |
 | NixOS / Nix | — | `nix run github:Kisakay/VeeMeeter/v0.1.0`, or the flake's NixOS / home-manager module |
 
 Then open **VeeMeeter** from your menu (it starts its engine), or enable the
 engine at login with `systemctl --user enable --now veemeeter`. Check your
-download against `SHA256SUMS` (`sha256sum -c SHA256SUMS --ignore-missing`).
+download against `SHA256SUMS`. In 0.1.0 that file lists the `.deb` files
+with a `~` that GitHub turned into a `.`, so check with
+`sed 's/~/./' SHA256SUMS | sha256sum -c --ignore-missing`.
 
 Noise suppression needs the RNNoise LADSPA plugin (`librnnoise_ladspa.so`,
 from your distribution or

@@ -68,7 +68,7 @@ There are two programs in one binary:
     [Releases page](https://github.com/Kisakay/VeeMeeter/releases), then:
 
     ```sh
-    sudo apt install ./veemeeter_*~debian13_amd64.deb    # or ~ubuntu24.04, …
+    sudo apt install ./veemeeter_*debian13_amd64.deb     # or *ubuntu24.04*, …
     systemctl --user enable --now veemeeter              # optional: engine at login
     ```
 

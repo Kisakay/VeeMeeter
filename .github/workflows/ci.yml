@@ -84,6 +84,9 @@ jobs:
         run: |
           scripts/release-notes.sh "${GITHUB_REF_NAME#v}" > notes.md
           ls dist/*.deb dist/*.rpm dist/*.tar.gz
+          # GitHub remplace « ~ » par « . » dans les noms des fichiers joints :
+          # on renomme avant de calculer SHA256SUMS pour que `sha256sum -c` marche.
+          for f in dist/*~*; do [ -e "$f" ] && mv -- "$f" "${f//\~/.}"; done
           (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
       - name: Publish
         env:

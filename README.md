@@ -116,7 +116,7 @@ Grab the package for your distribution on the
 is listed in `SHA256SUMS`:
 
 ```sh
-sudo apt install ./veemeeter_*~debian13_amd64.deb   # Debian / Ubuntu (pick yours)
+sudo apt install ./veemeeter_*debian13_amd64.deb    # Debian / Ubuntu (pick yours)
 sudo dnf install ./veemeeter-*.fedora*.x86_64.rpm   # Fedora
 sudo tar -xzf veemeeter-*-arch-x86_64.tar.gz -C /   # Arch Linux
 ```
