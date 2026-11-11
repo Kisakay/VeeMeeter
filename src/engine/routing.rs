@@ -30,6 +30,44 @@ pub fn match_ports(outs: &[P], ins: &[P]) -> Vec<(u32, u32)> {
     outs.iter().zip(ins).map(|(o, i)| (o.id, i.id)).collect()
 }
 
+/// Choisit le périphérique d'un premier lancement : le défaut du système s'il
+/// est utilisable, sinon le meilleur candidat. Les sources « monitor » et
+/// « loopback » (son de l'ordinateur renvoyé par la carte) ne sont prises
+/// qu'en dernier recours ; pour une entrée, un micro est préféré.
+pub fn pick_device(candidates: &[(&str, &str)], default: Option<&str>, capture: bool) -> Option<String> {
+    let looped = |name: &str, desc: &str| {
+        let t = format!("{name} {desc}").to_lowercase();
+        t.contains("monitor") || t.contains("loopback")
+    };
+    if let Some(d) = default {
+        if let Some(&(n, desc)) = candidates.iter().find(|(n, _)| *n == d) {
+            if !looped(n, desc) {
+                return Some(n.to_string());
+            }
+        }
+    }
+    let score = |&(n, desc): &(&str, &str)| -> i32 {
+        let t = format!("{n} {desc}").to_lowercase();
+        let mut s = 0;
+        if looped(n, desc) {
+            s -= 10;
+        }
+        if capture && t.contains("mic") {
+            s += 2;
+        }
+        s
+    };
+    // Meilleur score ; à égalité, l'ordre du graphe (premier trouvé).
+    let mut best: Option<(i32, &str)> = None;
+    for c in candidates {
+        let sc = score(c);
+        if best.is_none_or(|(b, _)| sc > b) {
+            best = Some((sc, c.0));
+        }
+    }
+    best.map(|(_, n)| n.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -54,6 +92,29 @@ mod tests {
         let six = ps(10, &["FL", "FR", "FC", "LFE", "RL", "RR"]);
         assert_eq!(match_ports(&ps(1, &["FL", "FR"]), &six), [(1, 10), (2, 11)]);
         assert_eq!(match_ports(&six, &ps(1, &["FL", "FR"])), [(10, 1), (11, 2)]);
+    }
+
+    #[test]
+    fn first_run_skips_loopback_sources() {
+        // Cas réel : Scarlett 2i2, l'entrée loopback est annoncée avant le micro.
+        let c = [
+            ("alsa_input.HiFi__Line2__source", "Scarlett 2i2 4th Gen Monitor Input 3+4 (stereo)"),
+            ("alsa_input.HiFi__Mic1__source", "Scarlett 2i2 4th Gen Input 1 Mic/Inst/Line"),
+            ("alsa_input.HiFi__Mic2__source", "Scarlett 2i2 4th Gen Input 2 Mic/Inst/Line"),
+        ];
+        assert_eq!(pick_device(&c, None, true).as_deref(), Some("alsa_input.HiFi__Mic1__source"));
+        // Le défaut du système gagne… sauf si c'est un loopback.
+        assert_eq!(
+            pick_device(&c, Some("alsa_input.HiFi__Mic2__source"), true).as_deref(),
+            Some("alsa_input.HiFi__Mic2__source")
+        );
+        assert_eq!(
+            pick_device(&c, Some("alsa_input.HiFi__Line2__source"), true).as_deref(),
+            Some("alsa_input.HiFi__Mic1__source")
+        );
+        // Rien d'autre qu'un loopback : on le prend quand même.
+        assert_eq!(pick_device(&c[..1], None, true).as_deref(), Some("alsa_input.HiFi__Line2__source"));
+        assert_eq!(pick_device(&[], None, true), None);
     }
 
     #[test]

@@ -80,6 +80,8 @@ enum Ev {
         version: String,
     },
     Synced,
+    /// Réveille la pompe sans rien changer.
+    Wake,
     Ipc(Inbound),
     Quit,
 }
@@ -166,6 +168,7 @@ struct Engine {
     cfg_path: PathBuf,
     first_run: bool,
     synced: bool,
+    sync_round: u8,
 
     graph: Graph,
     nodes: HashMap<String, Owned>,
@@ -303,6 +306,7 @@ pub fn run(cfg_path: PathBuf) -> Result<i32> {
         cfg_path,
         first_run,
         synced: false,
+        sync_round: 0,
         graph: Graph::default(),
         nodes: HashMap::new(),
         watched: HashMap::new(),
@@ -415,7 +419,15 @@ impl Engine {
                 }
             }
             Ev::CoreInfo { version } => self.version = version,
+            Ev::Wake => {}
             Ev::Synced => {
+                self.sync_round += 1;
+                if self.sync_round == 1 {
+                    // Les globals sont connus, mais pas encore les propriétés des
+                    // métadonnées (périphériques par défaut) : un aller-retour de plus.
+                    let _ = self.core.sync(1);
+                    return;
+                }
                 if !self.synced {
                     self.synced = true;
                     if self.first_run {
@@ -471,6 +483,15 @@ impl Engine {
             Command::Volume { id, .. } | Command::Mute { id, .. } => self.apply_volume(&id),
             Command::Primary { id } => {
                 self.primary_done.remove(&id);
+                self.dirty = true;
+            }
+            Command::SetDevice { id, device: Some(device) } => {
+                // Un strip matériel prend la disposition de son périphérique
+                // (un micro mono reste mono, une carte 5.1 reste en 5.1).
+                let channels = self.graph.node_by_name(&device).map(|n| n.channels.clone()).unwrap_or_default();
+                if !channels.is_empty() {
+                    let _ = self.cfg.apply(&Command::SetChannels { id, channels });
+                }
                 self.dirty = true;
             }
             _ => self.dirty = true,
@@ -726,25 +747,35 @@ impl Engine {
 
     /// Premier lancement : branche le micro et la sortie par défaut du système.
     fn fill_first_run_devices(&mut self) {
-        let pick = |capture: bool, this: &Engine| -> Option<String> {
+        let pick = |capture: bool| -> Option<String> {
             let key = if capture { "default.audio.source" } else { "default.audio.sink" };
             let class = if capture { "Audio/Source" } else { "Audio/Sink" };
-            this.defaults.get(key).filter(|n| !n.starts_with(PREFIX)).cloned().or_else(|| {
-                this.graph
-                    .nodes
-                    .values()
-                    .find(|n| n.class == class && !n.name.starts_with(PREFIX))
-                    .map(|n| n.name.clone())
-            })
+            let candidates: Vec<(&str, &str)> = self
+                .graph
+                .nodes
+                .values()
+                .filter(|n| n.class == class && !n.name.starts_with(PREFIX))
+                .map(|n| (n.name.as_str(), n.description.as_str()))
+                .collect();
+            routing::pick_device(&candidates, self.defaults.get(key).map(String::as_str), capture)
         };
-        let (src, sink) = (pick(true, self), pick(false, self));
+        let (src, sink) = (pick(true), pick(false));
+        let channels_of = |name: &Option<String>| {
+            name.as_deref().and_then(|n| self.graph.node_by_name(n)).map(|n| n.channels.clone())
+        };
+        let (src_ch, sink_ch) = (channels_of(&src), channels_of(&sink));
         for s in &mut self.cfg.strips {
             if s.device.is_none() {
-                s.device = match s.kind {
-                    Kind::HardwareIn => src.clone(),
-                    Kind::HardwareOut => sink.clone(),
-                    _ => None,
+                let (device, ch) = match s.kind {
+                    Kind::HardwareIn => (src.clone(), src_ch.clone()),
+                    Kind::HardwareOut => (sink.clone(), sink_ch.clone()),
+                    _ => continue,
                 };
+                log::info!("first run: {} → {}", s.id, device.as_deref().unwrap_or("no device"));
+                s.device = device;
+                if let Some(ch) = ch.filter(|c| !c.is_empty()) {
+                    s.channels = ch;
+                }
             }
         }
         self.first_run = false;
@@ -1162,7 +1193,7 @@ impl Engine {
         let line = ipc::encode(&Message::Meters { levels });
         self.broadcast(&line, |c| c.meters);
         if self.dirty {
-            self.waker.push(Ev::Synced); // réveille la pompe pour réconcilier
+            self.waker.push(Ev::Wake); // réveille la pompe pour réconcilier
         }
     }
 

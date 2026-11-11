@@ -31,6 +31,7 @@ enum CtlCmd {
     Rename(Rename),
     Move(MoveApp),
     Eq(EqCmd),
+    Device(DeviceCmd),
     Send(SendCmd),
     Denoise(DenoiseCmd),
     Quit(Quit),
@@ -139,6 +140,17 @@ struct EqCmd {
     value: String,
 }
 
+/// Hardware device of a strip: a node name from `ctl status`, or `none`.
+/// The strip takes the device's channel layout.
+#[derive(FromArgs)]
+#[argh(subcommand, name = "device")]
+struct DeviceCmd {
+    #[argh(positional)]
+    id: String,
+    #[argh(positional)]
+    device: String,
+}
+
 /// Level of one route, in dB (0 = straight through; `-- -6` for negatives).
 #[derive(FromArgs)]
 #[argh(subcommand, name = "send")]
@@ -243,6 +255,21 @@ fn exec(args: CtlArgs) -> Result<()> {
                 }
                 list => Command::Eq { id: e.id, enabled: Some(true), gains: Some(parse_gains(list)?) },
             }
+        }
+        CtlCmd::Device(d) => {
+            let device = match d.device.as_str() {
+                "none" | "-" => None,
+                name => {
+                    // Accepte aussi la description affichée par `ctl status`.
+                    let found = state.devices.iter().find(|x| x.name == name || x.description == name);
+                    Some(
+                        found
+                            .map(|x| x.name.clone())
+                            .ok_or_else(|| anyhow!("unknown device {name} (see `ctl status`)"))?,
+                    )
+                }
+            };
+            Command::SetDevice { id: d.id, device }
         }
         CtlCmd::Send(c) => {
             let db = volume_target(0.0, &c.db, None)?;
