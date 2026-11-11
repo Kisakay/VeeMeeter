@@ -1,7 +1,7 @@
 //! Configuration persistée (`$XDG_CONFIG_HOME/veemeeter/config.toml`) et
 //! application des commandes qui la modifient (logique pure, sans PipeWire).
 
-use crate::model::{Command, Kind, MAX_DB, MIN_DB, Strip, stereo};
+use crate::model::{Command, EQ_RANGE, Kind, MAX_DB, MIN_DB, Strip, stereo};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -38,6 +38,7 @@ impl Config {
             mute: false,
             routes: vec![],
             primary: false,
+            fx: Default::default(),
         };
         let mut hi = mk("hi1", Kind::HardwareIn, "Microphone");
         hi.routes = vec!["b1".into()];
@@ -91,6 +92,7 @@ impl Config {
         for s in &mut self.strips {
             s.name = clean_name(&s.name).unwrap_or_else(|| s.id.clone());
             s.volume_db = clamp_db(s.volume_db);
+            s.fx.gains = s.fx.gains.map(clamp_eq);
             if s.channels.is_empty() || s.channels.len() > 32 {
                 s.channels = stereo();
             }
@@ -162,6 +164,7 @@ impl Config {
                         mute: false,
                         routes: vec![],
                         primary: false,
+                        fx: Default::default(),
                     },
                 );
                 Ok(true)
@@ -257,9 +260,33 @@ impl Config {
                 self.strips.insert(group[target], s);
                 Ok(true)
             }
+            Command::Eq { id, enabled, gains } => {
+                let s = self.get_mut(id)?;
+                let before = s.fx.clone();
+                if let Some(e) = enabled {
+                    s.fx.eq = *e;
+                }
+                if let Some(g) = gains {
+                    if g.iter().any(|v| !v.is_finite()) {
+                        return Err("invalid gain".into());
+                    }
+                    s.fx.gains = g.map(clamp_eq);
+                }
+                Ok(s.fx != before)
+            }
+            Command::Denoise { id, on } => {
+                let s = self.get_mut(id)?;
+                let want = on.unwrap_or(!s.fx.denoise);
+                Ok(std::mem::replace(&mut s.fx.denoise, want) != want)
+            }
             Command::Subscribe { .. } | Command::MoveApp { .. } | Command::Ping { .. } | Command::Quit => Ok(false),
         }
     }
+}
+
+/// Gain d'égaliseur borné, arrondi au dixième de dB.
+fn clamp_eq(g: f32) -> f32 {
+    if g.is_finite() { (g * 10.0).round().clamp(-EQ_RANGE * 10.0, EQ_RANGE * 10.0) / 10.0 } else { 0.0 }
 }
 
 fn valid_id(id: &str) -> bool {
@@ -381,6 +408,21 @@ mod tests {
         assert_eq!(c.strips[0].volume_db, MAX_DB);
         assert_eq!(c.strips[0].routes, ["a1"]);
         assert!(!c.strips[1].primary);
+    }
+
+    #[test]
+    fn eq_and_denoise() {
+        let mut c = Config::first_run();
+        let gains = Some([3.0, 0.0, -99.0, 0.0, 1.25]);
+        assert!(c.apply(&Command::Eq { id: "hi1".into(), enabled: Some(true), gains }).unwrap());
+        let fx = &c.get("hi1").unwrap().fx;
+        assert!(fx.eq);
+        assert_eq!(fx.gains, [3.0, 0.0, -EQ_RANGE, 0.0, 1.3]);
+        assert!(!c.apply(&Command::Eq { id: "hi1".into(), enabled: Some(true), gains: None }).unwrap());
+        assert!(c.apply(&Command::Denoise { id: "hi1".into(), on: None }).unwrap());
+        assert!(c.get("hi1").unwrap().fx.denoise);
+        // Les effets par défaut ne sont pas écrits dans le fichier.
+        assert!(!toml::to_string(c.get("vi1").unwrap()).unwrap().contains("fx"));
     }
 
     #[test]

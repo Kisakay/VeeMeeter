@@ -75,6 +75,29 @@ primary = true
 | `routes` | list | inputs | Ids of the outputs this input is sent to. |
 | `primary` | bool | virtual | System default device. At most one virtual input and one virtual output. |
 
+| `fx` | table | any | Effects, see below. Omitted while everything is off. |
+
+### Effects (`[strip.fx]`)
+
+```toml
+[[strip]]
+id = "hi1"
+# …
+[strip.fx]
+eq = true                          # 5-band equalizer on
+gains = [-3.0, 1.5, 0.0, 3.5, 2.0] # dB at 80 Hz, 250 Hz, 1 kHz, 4 kHz, 10 kHz
+denoise = true                     # RNNoise noise suppression
+```
+
+| Key | Type | Meaning |
+|---|---|---|
+| `eq` | bool | Equalizer on. Bands: low shelf 80 Hz, peaks at 250 Hz, 1 kHz and 4 kHz, high shelf 10 kHz. |
+| `gains` | 5 floats | Band gains in dB, clamped to −12 … +12 (0.1 dB steps). Kept while `eq` is off. |
+| `denoise` | bool | Noise suppression. Needs the RNNoise LADSPA plugin (`librnnoise_ladspa.so`); ignored while it is missing. |
+
+Effects run inside the daemon (PipeWire `filter-chain`): after the fader for
+inputs and hardware outputs, *before* the virtual mic for virtual outputs.
+
 ### Channel layouts
 
 | Layout | `channels` |

@@ -11,6 +11,7 @@
 //! Les objets créés ne persistent pas (`object.linger = false`) : quand le
 //! daemon s'arrête, PipeWire les retire tous. Rien ne traîne.
 
+mod fx;
 mod graph;
 mod meter;
 mod pod;
@@ -111,6 +112,15 @@ struct Owned {
     created: Instant,
 }
 
+/// Effets chargés pour un strip (module `filter-chain` en process).
+struct FxState {
+    _module: fx::Module,
+    sig: fx::FxSig,
+    /// Nœud d'entrée des effets, lié pour régler les gains en direct.
+    proxy: Option<pw::node::Node>,
+    applied: Option<[f32; 5]>,
+}
+
 struct OwnedLink {
     proxy: pw::link::Link,
     at: Instant,
@@ -141,6 +151,9 @@ struct Engine {
     /// Nœuds tiers (périphériques, applications) observés pour leurs propriétés.
     watched: HashMap<u32, (pw::node::Node, pw::node::NodeListener)>,
     meters: HashMap<String, Meter>,
+    fx: HashMap<String, FxState>,
+    /// Plugin LADSPA RNNoise trouvé au démarrage.
+    rnnoise: Option<PathBuf>,
     links: HashMap<(u32, u32), OwnedLink>,
     metadata: Option<(u32, pw::metadata::Metadata, pw::metadata::MetadataListener)>,
     defaults: HashMap<String, String>,
@@ -152,6 +165,8 @@ struct Engine {
     last: Option<Snapshot>,
     dirty: bool,
     quitting: bool,
+    /// En dernier : les modules d'effets (champ `fx`) sont détruits avant lui.
+    context: pw::context::ContextRc,
 }
 
 pub fn run(cfg_path: PathBuf) -> Result<i32> {
@@ -210,7 +225,12 @@ pub fn run(cfg_path: PathBuf) -> Result<i32> {
             }
         })
         .error(move |id, _seq, res, message| {
-            log::warn!("pipewire error on {id}: {message} ({res})");
+            // -ENOENT : objet déjà retiré (lien d'un flux disparu), sans gravité.
+            if res == -2 {
+                log::debug!("pipewire: {message} ({id})");
+            } else {
+                log::warn!("pipewire error on {id}: {message} ({res})");
+            }
             if id == pw::core::PW_ID_CORE && res == -libc_epipe() {
                 log::error!("lost the PipeWire connection");
                 code.set(1);
@@ -265,6 +285,8 @@ pub fn run(cfg_path: PathBuf) -> Result<i32> {
         nodes: HashMap::new(),
         watched: HashMap::new(),
         meters: HashMap::new(),
+        fx: HashMap::new(),
+        rnnoise: fx::find_rnnoise(),
         links: HashMap::new(),
         metadata: None,
         defaults: HashMap::new(),
@@ -275,6 +297,7 @@ pub fn run(cfg_path: PathBuf) -> Result<i32> {
         last: None,
         dirty: true,
         quitting: false,
+        context,
     });
     log::info!("VeeMeeter daemon listening on {}", ipc::socket_path().display());
     ml.run();
@@ -317,6 +340,7 @@ impl Engine {
                     ObjectType::Node => {
                         self.graph.add_node(id, &get);
                         self.watch_node(id, &props);
+                        self.bind_fx(id, &props);
                     }
                     ObjectType::Port => self.graph.add_port(id, &get),
                     ObjectType::Link => self.graph.add_link(id, &get),
@@ -555,6 +579,31 @@ impl Engine {
         self.watched.insert(id, (node, listener));
     }
 
+    /// Lie le nœud d'entrée des effets d'un strip, pour régler les gains.
+    fn bind_fx(&mut self, id: u32, props: &HashMap<String, String>) {
+        let Some(strip) = props
+            .get("node.name")
+            .and_then(|n| n.strip_prefix("veemeeter.fx."))
+            .and_then(|n| n.strip_suffix(".in"))
+            .map(str::to_string)
+        else {
+            return;
+        };
+        if !self.fx.get(&strip).is_some_and(|f| f.proxy.is_none()) {
+            return;
+        }
+        match self.bind::<pw::node::Node>(id, ObjectType::Node, props) {
+            Ok(node) => {
+                if let Some(f) = self.fx.get_mut(&strip) {
+                    f.proxy = Some(node);
+                    f.applied = None; // réappliqués à la prochaine réconciliation
+                }
+                self.dirty = true;
+            }
+            Err(e) => log::debug!("cannot bind effects of {strip}: {e}"),
+        }
+    }
+
     fn bind_metadata(&mut self, id: u32, props: &HashMap<String, String>) {
         let meta: pw::metadata::Metadata = match self.bind(id, ObjectType::Metadata, props) {
             Ok(m) => m,
@@ -670,6 +719,40 @@ impl Engine {
             }
         }
 
+        // 1 bis. Effets : module (re)chargé si leur nature change, gains en direct.
+        self.fx.retain(|id, f| {
+            strips.iter().find(|s| &s.id == id).and_then(|s| fx::wanted(s, self.rnnoise.as_deref())).as_ref()
+                == Some(&f.sig)
+        });
+        for s in &strips {
+            let Some(sig) = fx::wanted(s, self.rnnoise.as_deref()) else { continue };
+            if !self.fx.contains_key(&s.id) {
+                let args = fx::module_args(s, &sig, self.rnnoise.as_deref());
+                match fx::Module::load(&self.context, &args) {
+                    Ok(module) => {
+                        log::info!("effects loaded on {} (eq: {}, denoise: {})", s.id, sig.eq, sig.denoise);
+                        self.fx.insert(s.id.clone(), FxState { _module: module, sig, proxy: None, applied: None });
+                        // Le nœud a peut-être déjà été annoncé : on le lie maintenant.
+                        if let Some(n) = self.graph.node_by_name(&fx::in_name(&s.id)).map(|n| n.id) {
+                            self.bind_fx(n, &HashMap::from([("node.name".into(), fx::in_name(&s.id))]));
+                        }
+                    }
+                    Err(e) => log::warn!("effects on {}: {e}", s.id),
+                }
+            }
+            if let Some(f) = self.fx.get_mut(&s.id) {
+                if let (Some(proxy), true) = (&f.proxy, f.sig.eq && f.applied != Some(s.fx.gains)) {
+                    let bytes = fx::gains_pod(&s.fx);
+                    proxy.set_param(
+                        spa::param::ParamType::Props,
+                        0,
+                        spa::pod::Pod::from_bytes(&bytes).expect("valid pod"),
+                    );
+                    f.applied = Some(s.fx.gains);
+                }
+            }
+        }
+
         // 2. Périphérique par défaut (une fois par démarrage / par demande).
         if self.synced && self.metadata.is_some() {
             for s in strips.iter().filter(|s| s.primary) {
@@ -761,26 +844,54 @@ impl Engine {
                 out.insert(k, passive);
             }
         };
+        // Nœuds d'effets (entrée, sortie) d'un strip, s'ils sont prêts.
+        let fx_nodes = |id: &str| -> Option<(u32, u32)> {
+            if !self.fx.contains_key(id) {
+                return None;
+            }
+            Some((g.node_by_name(&fx::in_name(id))?.id, g.node_by_name(&fx::out_name(id))?.id))
+        };
+        // Où le son entre dans un strip / d'où il en sort, effets compris.
+        let ends = |s: &Strip, node: u32| -> (u32, u32) {
+            match (s.kind, fx_nodes(&s.id)) {
+                // Sortie B : les effets passent AVANT le micro virtuel.
+                (Kind::VirtualOut, Some((fi, _))) => (fi, node),
+                (_, Some((_, fo))) => (node, fo),
+                (_, None) => (node, node),
+            }
+        };
         for s in &self.cfg.strips {
             let Some(node) = g.node_by_name(&node_name(&s.id)) else { continue };
+            let (sink, source) = ends(s, node.id);
+            if let Some((fi, fo)) = fx_nodes(&s.id) {
+                if s.kind == Kind::VirtualOut {
+                    add(routing::match_ports(&our_outs(fo), &ports(node.id, false)), false);
+                } else {
+                    add(routing::match_ports(&our_outs(node.id), &ports(fi, false)), false);
+                }
+            }
             let device = s.device.as_deref().and_then(|d| g.node_by_name(d)).filter(|d| !d.name.starts_with(PREFIX));
             match (s.kind, device) {
                 (Kind::HardwareIn, Some(d)) => {
-                    add(routing::match_ports(&ports(d.id, true), &ports(node.id, false)), false)
+                    add(routing::match_ports(&ports(d.id, true), &ports(sink, false)), false)
                 }
                 (Kind::HardwareOut, Some(d)) => {
-                    add(routing::match_ports(&our_outs(node.id), &ports(d.id, false)), false)
+                    add(routing::match_ports(&our_outs(source), &ports(d.id, false)), false)
                 }
                 _ => {}
             }
             for r in &s.routes {
-                if let Some(t) = g.node_by_name(&node_name(r)) {
-                    add(routing::match_ports(&our_outs(node.id), &ports(t.id, false)), false);
+                let target = self.cfg.get(r).and_then(|t| Some((t, g.node_by_name(&node_name(r))?)));
+                if let Some((t, tn)) = target {
+                    let (t_sink, _) = ends(t, tn.id);
+                    add(routing::match_ports(&our_outs(source), &ports(t_sink, false)), false);
                 }
             }
+            // Mesure après les effets (pour une sortie B, le nœud lui-même).
+            let metered = if s.kind == Kind::VirtualOut { node.id } else { source };
             if let Some(m) = self.meters.get(&s.id).and_then(|m| g.node_by_name(&m.node_name)) {
                 let pairs: Vec<(u32, u32)> =
-                    our_outs(node.id).iter().zip(ports(m.id, false)).map(|(o, i)| (o.id, i.id)).collect();
+                    our_outs(metered).iter().zip(ports(m.id, false)).map(|(o, i)| (o.id, i.id)).collect();
                 add(pairs, true);
             }
         }
@@ -855,7 +966,15 @@ impl Engine {
             })
             .collect();
         apps.sort_by(|a, b| (!a.playback, &a.name, a.id).cmp(&(!b.playback, &b.name, b.id)));
-        Snapshot { strips, devices, apps, default_sink, default_source, pipewire_version: self.version.clone() }
+        Snapshot {
+            strips,
+            devices,
+            apps,
+            default_sink,
+            default_source,
+            pipewire_version: self.version.clone(),
+            denoise_available: self.rnnoise.is_some(),
+        }
     }
 
     fn publish(&mut self) {

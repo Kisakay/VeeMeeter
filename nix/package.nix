@@ -4,7 +4,10 @@
 , llvmPackages
 , makeWrapper
 , pipewire
+, rnnoise-plugin
 , pkgs
+  # Suppression de bruit prête à l'emploi (plugin LADSPA RNNoise).
+, withRnnoise ? true
 }:
 
 let
@@ -36,7 +39,7 @@ rustPlatform.buildRustPackage {
 
   postFixup = ''
     wrapProgram $out/bin/veemeeter \
-      --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath runtimeLibs}
+      --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath runtimeLibs} ${lib.optionalString withRnnoise "--suffix LADSPA_PATH : ${rnnoise-plugin}/lib/ladspa"}
   '';
 
   meta = {

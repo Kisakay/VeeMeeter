@@ -9,7 +9,7 @@
 
 Rust · PipeWire native · NixOS ready · no browser, no Electron
 
-[Documentation](https://kisakay.github.io/VeeMeeter/) ·
+[Documentation](https://veemeter.v.bzh/) ·
 [Install](#install) ·
 [Guide](#5-minute-guide) ·
 [CLI](#command-line) ·
@@ -46,6 +46,9 @@ repairs the graph by itself when a device comes and goes.
   window is open.
 - 🔊 **Faders in dB** (−∞ … +12 dB), mute, channel layouts (mono, stereo,
   quad, 5.1, 7.1).
+- 🎛️ **Effects per strip** — 5-band equalizer (live, no reload) and RNNoise
+  noise suppression, running inside the daemon with PipeWire's
+  `filter-chain`.
 - 🎯 **Move applications** — Firefox to *Desktop*, Spotify to *Music*,
   Discord's microphone to *Virtual Mic*, from the window or the CLI.
 - ⭐ **System default** — make a virtual input your default output and a
@@ -121,6 +124,12 @@ cargo build --release
 ./target/release/veemeeter
 ```
 
+Noise suppression uses the RNNoise LADSPA plugin: install it from your
+distribution or from
+[noise-suppression-for-voice](https://github.com/werman/noise-suppression-for-voice/releases)
+so that `librnnoise_ladspa.so` is in `/usr/lib/ladspa` (or `LADSPA_PATH`).
+The Nix package already ships it.
+
 Ready-made packages for **Debian, Ubuntu, Fedora** and friends are coming
 next — see the [roadmap](#roadmap).
 
@@ -136,7 +145,8 @@ next — see the [roadmap](#roadmap).
 3. **Route**: on each input, light the outputs it should reach
    (A1 = what you hear, B1 = what your virtual mic sends).
 4. **Move apps** in the *Applications* panel, e.g. Discord's playback to
-   *Voice chat*.
+   *Voice chat*. Optional: open **FX** on your mic for noise suppression and
+   a touch of EQ.
 5. **In Discord / OBS / your browser**, choose **Virtual Mic** as the
    microphone. Done — balance everything with the faders. ♪
 
@@ -146,7 +156,11 @@ device. Everything is saved in `~/.config/veemeeter/config.toml`.
 
 <p align="center">
   <img src="docs/assets/screenshots/strip-menu.png" alt="Strip settings menu: rename, channels, move, reset, remove" width="49%">
-  <img src="docs/assets/screenshots/waking.png" alt="Mimi sleeping while the engine starts" width="49%">
+  <img src="docs/assets/screenshots/fx-menu.png" alt="Equalizer and noise suppression of the microphone" width="49%">
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshots/waking.png" alt="Mimi sleeping while the engine starts" width="60%">
 </p>
 
 ## Command line
@@ -163,11 +177,13 @@ veemeeter ctl route vi2 b1 on       # send Music to the virtual mic
 veemeeter ctl default vi1           # make Desktop the system default output
 veemeeter ctl add b "Stream Mix"    # new virtual output
 veemeeter ctl move 71 vi2           # move application stream 71 to Music
+veemeeter ctl eq hi1 -- -3,1.5,0,3.5,2   # equalize the mic (80 Hz … 10 kHz)
+veemeeter ctl denoise hi1 on        # RNNoise noise suppression
 veemeeter ctl --json status         # machine-readable state
 ```
 
-Full reference: [CLI](https://kisakay.github.io/VeeMeeter/cli/) ·
-[configuration file](https://kisakay.github.io/VeeMeeter/configuration/).
+Full reference: [CLI](https://veemeter.v.bzh/cli/) ·
+[configuration file](https://veemeter.v.bzh/configuration/).
 
 ## How it works
 
@@ -205,7 +221,6 @@ PulseMeeter is the project that inspired VeeMeeter. The main differences:
 ## Roadmap
 
 - 📦 Packages and CI runners for **Debian, Ubuntu, Fedora, Arch** (next!)
-- 🎛️ Per-strip EQ and noise suppression
 - 🎚️ Per-route gain
 - 🌙 Tray icon and global shortcuts
 
@@ -216,7 +231,7 @@ awake while something is routed to it.
 ## Contributing
 
 Bug reports and PRs are welcome — see the
-[contributing guide](https://kisakay.github.io/VeeMeeter/contributing/).
+[contributing guide](https://veemeter.v.bzh/contributing/).
 `nix develop`, then `cargo test` and `cargo clippy`. Screenshots are
 regenerated with `scripts/screenshots.sh` (the real window, demo data).
 

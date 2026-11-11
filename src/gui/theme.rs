@@ -12,6 +12,7 @@ pub struct Theme {
     pub selection: Color32,
     pub accent: Color32,
     pub accent2: Color32,
+    pub accent3: Color32,
     pub text: Color32,
     pub muted: Color32,
     /// Texte posé sur un aplat accent / mute / bus.
@@ -40,6 +41,7 @@ pub const THEME: Theme = Theme {
     selection: hex(0x5B3FB8),
     accent: hex(0xFF8FB8),
     accent2: hex(0xB9A3F5),
+    accent3: hex(0x7FE0C2),
     text: hex(0xF7F1FF),
     muted: hex(0xB8ADD6),
     on_accent: hex(0x2B2140),

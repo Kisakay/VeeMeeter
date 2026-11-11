@@ -32,4 +32,5 @@ shoot() { # shoot <fichier> <démon:0|1> [clic x y]
 
 shoot mixer.png 1
 shoot strip-menu.png 1 "481 107"
+shoot fx-menu.png 1 "114 118"
 shoot waking.png 0

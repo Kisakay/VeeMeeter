@@ -85,6 +85,39 @@ pub struct Strip {
     /// Périphérique par défaut du système (strips virtuels seulement).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub primary: bool,
+    /// Effets du strip : égaliseur et suppression de bruit.
+    #[serde(default, skip_serializing_if = "Fx::is_default")]
+    pub fx: Fx,
+}
+
+/// Bandes de l'égaliseur : (filtre `filter-chain`, fréquence Hz, Q, libellé).
+pub const EQ_BANDS: [(&str, f32, f32, &str); 5] = [
+    ("bq_lowshelf", 80.0, 0.7, "80"),
+    ("bq_peaking", 250.0, 1.0, "250"),
+    ("bq_peaking", 1000.0, 1.0, "1k"),
+    ("bq_peaking", 4000.0, 1.0, "4k"),
+    ("bq_highshelf", 10000.0, 0.7, "10k"),
+];
+/// Plage des gains de l'égaliseur (± dB).
+pub const EQ_RANGE: f32 = 12.0;
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct Fx {
+    /// Égaliseur 5 bandes actif.
+    #[serde(default)]
+    pub eq: bool,
+    /// Gains des bandes en dB (`EQ_BANDS`).
+    #[serde(default)]
+    pub gains: [f32; 5],
+    /// Suppression de bruit RNNoise (plugin LADSPA du système).
+    #[serde(default)]
+    pub denoise: bool,
+}
+
+impl Fx {
+    pub fn is_default(&self) -> bool {
+        *self == Fx::default()
+    }
 }
 
 pub fn stereo() -> Vec<String> {
@@ -162,6 +195,9 @@ pub struct Snapshot {
     pub default_sink: Option<String>,
     pub default_source: Option<String>,
     pub pipewire_version: String,
+    /// Le plugin RNNoise est installé : la suppression de bruit est possible.
+    #[serde(default)]
+    pub denoise_available: bool,
 }
 
 impl Snapshot {
@@ -238,6 +274,17 @@ pub enum Command {
     Primary {
         id: String,
     },
+    /// Égaliseur : `enabled` (`None` = inchangé) et/ou nouveaux gains.
+    Eq {
+        id: String,
+        enabled: Option<bool>,
+        gains: Option<[f32; 5]>,
+    },
+    /// Suppression de bruit, `None` = bascule.
+    Denoise {
+        id: String,
+        on: Option<bool>,
+    },
     /// Déplace un flux d'application vers un strip (ou un nœud par son nom).
     MoveApp {
         app: u32,
@@ -299,6 +346,7 @@ mod tests {
             mute: false,
             routes: vec![],
             primary: false,
+            fx: Fx::default(),
         };
         let s = [
             mk("hi1", Kind::HardwareIn),

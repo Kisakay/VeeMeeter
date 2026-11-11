@@ -110,6 +110,24 @@ veemeeter ctl move 87 vi2        # move app stream #87 to "Voice chat"
 
 `<app>` is the numeric id shown under *APPLICATIONS* in `ctl status`.
 
+### `eq <id> [on|off|toggle|<gains>]`
+
+```sh
+veemeeter ctl eq hi1                 # toggle the equalizer
+veemeeter ctl eq hi1 3,0,-2,1.5,0    # set the five bands (and turn it on)
+```
+
+Gains are in dB for 80 Hz, 250 Hz, 1 kHz, 4 kHz and 10 kHz (−12 … +12).
+Write `-- -3,0,0,0,0` when the list starts with a minus sign.
+
+### `denoise <id> [on|off|toggle]`
+
+```sh
+veemeeter ctl denoise hi1 on         # RNNoise on the microphone
+```
+
+Fails with a hint when the RNNoise plugin is not installed.
+
 ### `quit`
 
 Stops the daemon; every VeeMeeter device disappears. With the systemd

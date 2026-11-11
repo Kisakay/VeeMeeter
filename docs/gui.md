@@ -50,6 +50,22 @@ Device picker *(hardware strips only)*
 :   Rename, channel layout (*Mono*, *Stereo*, *Quad*, *5.1*, *7.1*, or
     *Match device*), move the strip left/right, *Reset volume (0 dB)*, *Remove*.
 
+## Effects (FX)
+
+![Equalizer and noise suppression panel](assets/screenshots/fx-menu.png){ .vm-shot loading=lazy }
+
+The **FX** button of a strip lights up (mint) when an effect is on. It opens:
+
+- **Equalizer** — five bands (80 Hz, 250 Hz, 1 kHz, 4 kHz, 10 kHz),
+  −12 … +12 dB. Changes are heard live; double-click a band for 0 dB,
+  **Flat** resets them all.
+- **Noise suppression** — RNNoise removes fans, keyboard clicks and hum from
+  a voice. Greyed out until the RNNoise LADSPA plugin is installed (the Nix
+  package ships it).
+
+Turning an effect on or off reloads the effect chain of that strip (a very
+short gap); moving a band never does.
+
 ## Applications panel
 
 Lists every stream that is playing (▶) or recording (●), with the strip or

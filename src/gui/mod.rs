@@ -154,6 +154,8 @@ struct App {
     mimi: Mimi,
     /// Valeur du fader pendant un glissé (l'écho du daemon arrive après).
     dragging: HashMap<String, f32>,
+    /// Gains d'égaliseur pendant un glissé.
+    eq_drag: HashMap<String, [f32; 5]>,
     meters: HashMap<(String, usize), MeterView>,
     rename: HashMap<String, String>,
     show_apps: bool,
@@ -166,6 +168,7 @@ impl App {
             shared,
             mimi,
             dragging: HashMap::new(),
+            eq_drag: HashMap::new(),
             meters: HashMap::new(),
             rename: HashMap::new(),
             show_apps: true,
@@ -383,6 +386,14 @@ impl App {
                         );
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             ui.menu_button(RichText::new("•••").color(T.muted), |ui| self.strip_menu(ui, st, s));
+                            let active = x.fx.eq || (x.fx.denoise && st.denoise_available);
+                            let label =
+                                RichText::new("FX").small().strong().color(if active { T.on_accent } else { T.muted });
+                            let fx_button = egui::Button::new(label).fill(if active { T.accent3 } else { T.card_hi });
+                            egui::containers::menu::MenuButton::from_button(fx_button)
+                                .ui(ui, |ui| self.fx_menu(ui, st, s))
+                                .0
+                                .on_hover_text("Equalizer and noise suppression");
                         });
                     });
                     ui.add(egui::Label::new(RichText::new(&x.name).size(15.0).strong().color(T.text)).truncate());
@@ -510,6 +521,66 @@ impl App {
                 }
             },
         );
+    }
+
+    fn fx_menu(&mut self, ui: &mut Ui, st: &Snapshot, s: &StripState) {
+        let x = &s.strip;
+        ui.set_min_width(260.0);
+        let mut eq = x.fx.eq;
+        if ui.checkbox(&mut eq, RichText::new("Equalizer").strong().color(T.text)).changed() {
+            self.send(Command::Eq { id: x.id.clone(), enabled: Some(eq), gains: None });
+        }
+        let mut gains = self.eq_drag.get(&x.id).copied().unwrap_or(x.fx.gains);
+        let before = gains;
+        let mut dragging = false;
+        ui.add_enabled_ui(x.fx.eq, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().slider_width = 120.0;
+                for (i, (_, _, _, label)) in EQ_BANDS.iter().enumerate() {
+                    ui.vertical(|ui| {
+                        ui.set_width(42.0);
+                        let r = ui.add(
+                            egui::Slider::new(&mut gains[i], -EQ_RANGE..=EQ_RANGE)
+                                .vertical()
+                                .show_value(false)
+                                .trailing_fill(true),
+                        );
+                        if r.double_clicked() {
+                            gains[i] = 0.0;
+                        }
+                        dragging |= r.dragged();
+                        ui.label(RichText::new(format!("{:+.0}", gains[i])).small().monospace().color(T.muted));
+                        ui.label(RichText::new(*label).small().strong().color(T.text));
+                    });
+                }
+            });
+            if ui.button("Flat").on_hover_text("All bands back to 0 dB").clicked() {
+                gains = [0.0; 5];
+            }
+        });
+        let gains = gains.map(|g| (g * 2.0).round() / 2.0);
+        if dragging {
+            self.eq_drag.insert(x.id.clone(), gains);
+        } else {
+            self.eq_drag.remove(&x.id);
+        }
+        if gains != before.map(|g| (g * 2.0).round() / 2.0) {
+            self.send(Command::Eq { id: x.id.clone(), enabled: None, gains: Some(gains) });
+        }
+        ui.separator();
+        let mut dn = x.fx.denoise;
+        let r = ui.add_enabled(
+            st.denoise_available,
+            egui::Checkbox::new(&mut dn, RichText::new("Noise suppression").strong().color(T.text)),
+        );
+        let r = if st.denoise_available {
+            r.on_hover_text("RNNoise: removes background noise (fans, keyboard, hum) from a voice")
+        } else {
+            r.on_disabled_hover_text("Install the RNNoise LADSPA plugin (librnnoise_ladspa.so) to enable it")
+        };
+        if r.changed() {
+            self.send(Command::Denoise { id: x.id.clone(), on: Some(dn) });
+        }
     }
 
     fn strip_menu(&mut self, ui: &mut Ui, st: &Snapshot, s: &StripState) {

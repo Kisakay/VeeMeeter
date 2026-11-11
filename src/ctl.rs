@@ -30,6 +30,8 @@ enum CtlCmd {
     Remove(Remove),
     Rename(Rename),
     Move(MoveApp),
+    Eq(EqCmd),
+    Denoise(DenoiseCmd),
     Quit(Quit),
 }
 
@@ -125,6 +127,27 @@ struct MoveApp {
     to: String,
 }
 
+/// Equalizer of a strip: on, off, toggle, or five gains in dB for
+/// 80 Hz, 250 Hz, 1 kHz, 4 kHz and 10 kHz (e.g. `3,0,-2,1,0`; turns it on).
+#[derive(FromArgs)]
+#[argh(subcommand, name = "eq")]
+struct EqCmd {
+    #[argh(positional)]
+    id: String,
+    #[argh(positional, default = "String::from(\"toggle\")")]
+    value: String,
+}
+
+/// Noise suppression (RNNoise) of a strip: on, off or toggle (default).
+#[derive(FromArgs)]
+#[argh(subcommand, name = "denoise")]
+struct DenoiseCmd {
+    #[argh(positional)]
+    id: String,
+    #[argh(positional, default = "String::from(\"toggle\")")]
+    state: String,
+}
+
 /// Stop the daemon (all VeeMeeter devices disappear).
 #[derive(FromArgs)]
 #[argh(subcommand, name = "quit")]
@@ -199,6 +222,21 @@ fn exec(args: CtlArgs) -> Result<()> {
         CtlCmd::Remove(r) => Command::Remove { id: r.id },
         CtlCmd::Rename(r) => Command::Rename { id: r.id, name: r.name },
         CtlCmd::Move(m) => Command::MoveApp { app: m.app, to: m.to },
+        CtlCmd::Eq(e) => {
+            let fx = &state.strip(&e.id).ok_or_else(|| anyhow!("unknown strip {}", e.id))?.strip.fx;
+            match e.value.as_str() {
+                "on" | "off" | "toggle" | "true" | "false" | "1" | "0" | "yes" | "no" => {
+                    Command::Eq { id: e.id, enabled: Some(toggle(&e.value)?.unwrap_or(!fx.eq)), gains: None }
+                }
+                list => Command::Eq { id: e.id, enabled: Some(true), gains: Some(parse_gains(list)?) },
+            }
+        }
+        CtlCmd::Denoise(d) => {
+            if !state.denoise_available {
+                bail!("noise suppression needs the RNNoise LADSPA plugin (librnnoise_ladspa.so), see the docs");
+            }
+            Command::Denoise { id: d.id, on: toggle(&d.state)? }
+        }
         CtlCmd::Quit(_) => {
             client.send(&Command::Quit)?;
             return Ok(());
@@ -213,6 +251,16 @@ fn exec(args: CtlArgs) -> Result<()> {
             _ => {}
         }
     }
+}
+
+/// `3,0,-2,1,0` → cinq gains en dB.
+fn parse_gains(list: &str) -> Result<[f32; 5]> {
+    let v: Vec<f32> = list
+        .split(',')
+        .map(|g| g.trim().trim_end_matches("dB").parse::<f32>())
+        .collect::<Result<_, _>>()
+        .map_err(|_| anyhow!("expected on, off, toggle or five gains like 3,0,-2,1,0"))?;
+    v.try_into().map_err(|_| anyhow!("the equalizer has exactly five bands"))
 }
 
 /// Niveau voulu : `up`/`down [pas]` relatifs, sinon un niveau absolu en dB
@@ -236,7 +284,6 @@ fn volume_target(current: f32, level: &str, step: Option<f32>) -> Result<f32> {
     })
 }
 
-
 fn print_status(s: &Snapshot) {
     println!("PipeWire {}", s.pipewire_version);
     for (title, input) in [("INPUTS", true), ("OUTPUTS", false)] {
@@ -250,6 +297,12 @@ fn print_status(s: &Snapshot) {
                 format!("{:+6.1}", x.volume_db)
             };
             let mut flags = vec![];
+            if x.fx.eq {
+                flags.push("eq");
+            }
+            if x.fx.denoise {
+                flags.push("denoise");
+            }
             if x.mute {
                 flags.push("muted");
             }
@@ -317,5 +370,12 @@ mod tests {
         assert_eq!(volume_target(-10.0, "off", None).unwrap(), crate::model::MIN_DB);
         assert!(volume_target(0.0, "-6", Some(2.0)).is_err());
         assert!(volume_target(0.0, "loud", None).is_err());
+    }
+
+    #[test]
+    fn eq_gain_lists() {
+        assert_eq!(super::parse_gains("3,0,-2.5,1dB,0").unwrap(), [3.0, 0.0, -2.5, 1.0, 0.0]);
+        assert!(super::parse_gains("1,2,3").is_err());
+        assert!(super::parse_gains("a,b,c,d,e").is_err());
     }
 }

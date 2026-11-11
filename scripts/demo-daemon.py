@@ -9,9 +9,10 @@ que le vrai daemon (une ligne JSON par message). Aucun accès à PipeWire.
 """
 import json, math, os, socket, threading, time
 
-def strip(id, kind, name, routes=(), device=None, ch=("FL", "FR"), db=0.0, mute=False, default=False):
+def strip(id, kind, name, routes=(), device=None, ch=("FL", "FR"), db=0.0, mute=False, default=False, fx=None):
     s = {"id": id, "kind": kind, "name": name, "channels": list(ch), "volume_db": db, "mute": mute,
          "ready": True, "online": True, "is_default": default}
+    if fx: s["fx"] = fx
     if routes: s["routes"] = list(routes)
     if device: s["device"] = device
     if default: s["primary"] = True
@@ -19,7 +20,8 @@ def strip(id, kind, name, routes=(), device=None, ch=("FL", "FR"), db=0.0, mute=
 
 STATE = {
     "strips": [
-        strip("hi1", "hardware_in", "Microphone", ["b1"], "alsa_input.usb-mic", ["MONO"], 2.5),
+        strip("hi1", "hardware_in", "Microphone", ["b1"], "alsa_input.usb-mic", ["MONO"], 2.5,
+              fx={"eq": True, "gains": [-3.0, 1.5, 0.0, 3.5, 2.0], "denoise": True}),
         strip("vi1", "virtual_in", "Desktop", ["a1"], default=True),
         strip("vi2", "virtual_in", "Music", ["a1", "b1"], db=-9.0),
         strip("vi3", "virtual_in", "Voice chat", ["a1"], db=-3.5),
@@ -47,6 +49,7 @@ STATE = {
     "default_sink": "veemeeter.vi1",
     "default_source": "veemeeter.b1",
     "pipewire_version": "1.6.11",
+    "denoise_available": True,
 }
 
 # Niveaux crête de base (amplitude) par strip, modulés dans le temps.
