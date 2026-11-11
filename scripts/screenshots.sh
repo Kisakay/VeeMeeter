@@ -9,6 +9,7 @@ OUT=docs/assets/screenshots
 mkdir -p "$OUT"
 tool() { echo "$(nix build --no-link --print-out-paths "nixpkgs#$1")/bin"; }
 XVFB=$(tool xvfb-run) IM=$(tool imagemagick) XDO=$(tool xdotool)
+# shellcheck disable=SC2016  # expansion voulue dans le shell nix develop
 LIBS=$(nix develop -c bash -c 'echo $LD_LIBRARY_PATH' 2>/dev/null)
 RT=$(mktemp -d)
 trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$RT"' EXIT

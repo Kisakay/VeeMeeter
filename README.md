@@ -109,6 +109,18 @@ repairs the graph by itself when a device comes and goes.
 }
 ```
 
+### Debian, Ubuntu, Fedora, Arch
+
+Grab the package for your distribution on the
+[Releases page](https://github.com/Kisakay/VeeMeeter/releases) — every file
+is listed in `SHA256SUMS`:
+
+```sh
+sudo apt install ./veemeeter_*~debian13_amd64.deb   # Debian / Ubuntu (pick yours)
+sudo dnf install ./veemeeter-*.fedora*.x86_64.rpm   # Fedora
+sudo tar -xzf veemeeter-*-arch-x86_64.tar.gz -C /   # Arch Linux
+```
+
 ### Try it without installing
 
 ```sh
@@ -132,8 +144,7 @@ distribution or from
 so that `librnnoise_ladspa.so` is in `/usr/lib/ladspa` (or `LADSPA_PATH`).
 The Nix package already ships it.
 
-Ready-made packages for **Debian, Ubuntu, Fedora** and friends are coming
-next — see the [roadmap](#roadmap).
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
 ## 5 minute guide
 
@@ -223,7 +234,7 @@ PulseMeeter is the project that inspired VeeMeeter. The main differences:
 
 ## Roadmap
 
-- 📦 Packages and CI runners for **Debian, Ubuntu, Fedora, Arch** (next!)
+- 📦 More architectures (aarch64 packages) and distro repositories
 - 🌙 Tray icon (global shortcuts already work: bind `veemeeter ctl …`, see the [CLI docs](https://veemeter.v.bzh/cli/#keyboard-shortcuts))
 
 Known limits today: VeeMeeter needs a PipeWire session manager

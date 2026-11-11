@@ -67,13 +67,28 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+      # Les releases sont immuables : tout est vérifié AVANT de publier.
+      - name: Tag matches Cargo.toml
+        run: |
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
+            exit 1
+          fi
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+      - name: Notes and checksums
+        run: |
+          scripts/release-notes.sh "${GITHUB_REF_NAME#v}" > notes.md
+          ls dist/*.deb dist/*.rpm dist/*.tar.gz
+          (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* \
-            --repo "$GITHUB_REPOSITORY" --title "VeeMeeter $GITHUB_REF_NAME" --generate-notes
+            --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "VeeMeeter $GITHUB_REF_NAME" --notes-file notes.md

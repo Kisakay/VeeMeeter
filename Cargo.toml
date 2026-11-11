@@ -57,6 +57,7 @@ assets = [
     { source = "assets/veemeeter.svg", dest = "/usr/share/icons/hicolor/scalable/apps/veemeeter.svg", mode = "644" },
     { source = "assets/veemeeter.service", dest = "/usr/lib/systemd/user/veemeeter.service", mode = "644" },
     { source = "README.md", dest = "/usr/share/doc/veemeeter/README.md", mode = "644", doc = true },
+    { source = "LICENSE", dest = "/usr/share/licenses/veemeeter/LICENSE", mode = "644", doc = true },
 ]
 auto-req = "auto"
 

@@ -2,7 +2,8 @@
 
 VeeMeeter runs on **Linux with PipeWire** (with `pipewire-pulse` if you want
 pavucontrol and desktop volume keys to see its devices). It ships as a Nix
-flake; building from source works on any distribution.
+flake and as packages for Debian, Ubuntu, Fedora and Arch Linux; building
+from source works on any distribution.
 
 There are two programs in one binary:
 
@@ -60,6 +61,32 @@ There are two programs in one binary:
 
     `services.veemeeter.enable` installs the package and runs the daemon as
     a user service for your account only.
+
+=== "Debian / Ubuntu"
+
+    Download the `.deb` for your release from the
+    [Releases page](https://github.com/Kisakay/VeeMeeter/releases), then:
+
+    ```sh
+    sudo apt install ./veemeeter_*~debian13_amd64.deb    # or ~ubuntu24.04, …
+    systemctl --user enable --now veemeeter              # optional: engine at login
+    ```
+
+=== "Fedora"
+
+    ```sh
+    sudo dnf install ./veemeeter-*.fedora*.x86_64.rpm
+    systemctl --user enable --now veemeeter
+    ```
+
+=== "Arch Linux"
+
+    ```sh
+    sudo tar -xzf veemeeter-*-arch-x86_64.tar.gz -C /
+    systemctl --user enable --now veemeeter
+    ```
+
+    Needs `pipewire`, `wireplumber`, `libglvnd` and `libxkbcommon`.
 
 === "nix run"
 
