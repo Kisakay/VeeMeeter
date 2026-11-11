@@ -1,0 +1,166 @@
+# VeeMeeter palette — solid colours only (no gradients, ever).
+#
+# Sections:
+#   [brand]     marketing / docs / illustrations
+#   [mascot]    Mimi's own colours (used by branding/src/*.py)
+#   [ui.dark]   egui theme, dark (default)
+#   [ui.light]  egui theme, light
+#   [[contrast]] checked WCAG 2.x text pairs (ratio, AA level reached)
+#
+# Every value is "#RRGGBB". Keys are stable: the GUI reads [ui.*] by name.
+
+[brand]
+sakura        = "#FF8FB8"  # primary pink
+sakura_deep   = "#C2185B"  # pink for text/links on cream (5.54:1)
+lavender      = "#B9A3F5"  # secondary
+lavender_deep = "#5B3FB8"  # lavender for text/links on cream (6.95:1)
+lavender_pale = "#DCD1FC"
+mint          = "#7FE0C2"  # success / "on"
+mint_deep     = "#1E7A5E"  # mint for text on cream (4.95:1)
+sky           = "#8CCBFF"  # info / hardware bus A
+lemon         = "#FFE07A"  # highlight / default-device star
+peach         = "#FFE6D5"
+cream         = "#FFF7EE"  # light background
+white         = "#FFFFFF"
+ink           = "#2B2140"  # text, outlines, dark tiles
+ink_soft      = "#5A4E78"  # muted text on cream (7.08:1)
+night         = "#1E1830"  # dark background
+cherry        = "#FF5C7A"  # mute / error
+
+[mascot]
+outline   = "#2B2140"
+skin      = "#FFE6D5"
+skin_shade = "#F7C9B3"
+hair      = "#B9A3F5"
+hair_shade = "#9B83E8"
+hair_shine = "#DCD1FC"
+headphones = "#FF8FB8"
+headphones_shade = "#EE6A9C"
+hoodie    = "#7FE0C2"
+hoodie_shade = "#56C6A4"
+iris      = "#7B5CD6"
+iris_deep = "#4E3596"
+blush     = "#FFADC6"
+tights    = "#4A3D6B"
+
+[ui.dark]
+bg             = "#1E1830"  # window background
+panel          = "#272040"  # side panels, top bar
+card           = "#312852"  # strip cards
+card_hover     = "#3B3160"
+border         = "#4A3F73"
+selection      = "#5B3FB8"
+text           = "#F7F1FF"  # 15.45:1 on bg, 12.20:1 on card
+text_muted     = "#B8ADD6"  # 8.13:1 on bg, 6.42:1 on card
+text_on_accent = "#2B2140"  # text drawn on accent/accent_2/mint/sky/lemon fills
+accent         = "#FF8FB8"  # primary buttons, active toggles (6.35:1 on card)
+accent_2       = "#B9A3F5"  # secondary buttons, sliders (7.04:1 on panel)
+accent_3       = "#7FE0C2"
+bus_a          = "#8CCBFF"  # A (hardware output) route buttons
+bus_b          = "#B9A3F5"  # B (virtual output) route buttons
+default_star   = "#FFE07A"
+meter_bg       = "#15111F"  # empty part of a VU meter
+meter_green    = "#7FE0A6"  # below -12 dBFS
+meter_yellow   = "#FFD86B"  # -12 .. -3 dBFS
+meter_red      = "#FF6B8B"  # above -3 dBFS / clip
+mute           = "#FF5C7A"  # mute button "on" (5.75:1 on bg; draw text_on_accent on it, 5.07:1)
+success        = "#7FE0C2"
+warning        = "#FFE07A"
+error          = "#FF5C7A"
+
+[ui.light]
+bg             = "#FFF7EE"
+panel          = "#FFFFFF"
+card           = "#FFFFFF"
+card_hover     = "#FFF0F5"
+border         = "#E6DCF5"
+selection      = "#DCD1FC"
+text           = "#2B2140"  # 14.19:1 on bg
+text_muted     = "#5A4E78"  # 7.08:1 on bg
+text_on_accent = "#2B2140"
+accent         = "#FF8FB8"  # fill only; use accent_text for text
+accent_text    = "#C2185B"
+accent_2       = "#B9A3F5"
+accent_2_text  = "#5B3FB8"
+accent_3       = "#7FE0C2"
+bus_a          = "#8CCBFF"
+bus_b          = "#B9A3F5"
+default_star   = "#FFE07A"
+meter_bg       = "#EDE6F7"
+meter_green    = "#4FCB8A"
+meter_yellow   = "#FFC93C"
+meter_red      = "#FF5C7A"
+mute           = "#FF5C7A"
+success        = "#1E7A5E"
+warning        = "#8A6400"
+error          = "#C2185B"
+
+# Text pairs, WCAG 2.x contrast ratio (AA = 4.5 normal text, 3.0 large/UI).
+[[contrast]]
+pair = ["ink", "cream"]
+ratio = 14.19
+level = "AAA"
+[[contrast]]
+pair = ["ink_soft", "cream"]
+ratio = 7.08
+level = "AAA"
+[[contrast]]
+pair = ["sakura_deep", "cream"]
+ratio = 5.54
+level = "AA"
+[[contrast]]
+pair = ["lavender_deep", "cream"]
+ratio = 6.95
+level = "AA"
+[[contrast]]
+pair = ["mint_deep", "cream"]
+ratio = 4.95
+level = "AA"
+[[contrast]]
+pair = ["ink", "sakura"]
+ratio = 7.08
+level = "AAA"
+[[contrast]]
+pair = ["ink", "lavender"]
+ratio = 6.90
+level = "AA"
+[[contrast]]
+pair = ["ink", "mint"]
+ratio = 9.57
+level = "AAA"
+[[contrast]]
+pair = ["ink", "sky"]
+ratio = 8.68
+level = "AAA"
+[[contrast]]
+pair = ["ink", "lemon"]
+ratio = 11.62
+level = "AAA"
+[[contrast]]
+pair = ["ui.dark.text", "ui.dark.bg"]
+ratio = 15.45
+level = "AAA"
+[[contrast]]
+pair = ["ui.dark.text", "ui.dark.card"]
+ratio = 12.20
+level = "AAA"
+[[contrast]]
+pair = ["ui.dark.text_muted", "ui.dark.bg"]
+ratio = 8.13
+level = "AAA"
+[[contrast]]
+pair = ["ui.dark.text_muted", "ui.dark.card"]
+ratio = 6.42
+level = "AA"
+[[contrast]]
+pair = ["ui.dark.accent", "ui.dark.card"]
+ratio = 6.35
+level = "AA"
+[[contrast]]
+pair = ["ui.dark.mute", "ui.dark.bg"]
+ratio = 5.75
+level = "AA"
+[[contrast]]
+pair = ["ui.dark.text_on_accent", "ui.dark.mute"]
+ratio = 5.07
+level = "AA"

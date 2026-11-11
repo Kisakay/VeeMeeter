@@ -1,0 +1,9 @@
+{% extends "main.html" %}
+{% block content %}
+<div class="vm-empty">
+  <img src="{{ 'assets/brand/mascot/mimi-surprised.svg' | url }}" alt="Mimi, surprised">
+  <h1>404 · this page went silent</h1>
+  <p>Mimi listened really hard, but there is no signal here (⊙_⊙;)</p>
+  <p><a class="md-button md-button--primary" href="{{ nav.homepage.url | url }}">Back to the mixer</a></p>
+</div>
+{% endblock %}
