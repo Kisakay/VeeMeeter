@@ -2,6 +2,52 @@
 
 All notable changes to VeeMeeter. Versions follow [SemVer](https://semver.org/).
 
+## [0.2.0] - 2026-11-13
+
+Mimi moves into your system tray, and VeeMeeter gets virtual cables.
+
+### Added
+
+- **System tray** — Mimi lives in the tray and dances to the music coming
+  out of your outputs: she hops on the beats (higher when it's loud),
+  equalizer bars pop up next to her, she cheers when it gets loud and naps
+  after 30 seconds of silence. Menu: *Open Vee*, *Start on tray*, *Open
+  GitHub*, *Report an issue*, *Close Vee*. New `veemeeter tray` command and
+  `gui --no-tray` switch. Uses StatusNotifierItem (KDE, COSMIC, Xfce,
+  waybar…; GNOME needs the AppIndicator extension).
+- **Start on tray** — launch with only Mimi in the tray; set it from the tray
+  menu or the new *Vee* menu in the window.
+- **Virtual cables** (VB-Cable style) — `+ Add → Virtual cable` or
+  `veemeeter ctl add c <name>`: one app plays into *<name>*, another records
+  *<name> (output)*, with fader, mute, meter, effects and A/B routes.
+- `veemeeter ctl device <id> <device|none>` picks a hardware strip's device.
+
+### Changed
+
+- Launching VeeMeeter while a window is open brings that window back
+  instead of opening a second one.
+- Changing a hardware strip's device gives it the device's channel layout
+  (mono mic → mono strip).
+- The strip, FX and send-level menus only close on a click outside them.
+
+### Fixed
+
+- First launch picks the real microphone, not the sound card's loopback
+  monitor (seen on a Scarlett 2i2: the mic meter followed the desktop).
+
+### Install
+
+| Distribution | File | Command |
+|---|---|---|
+| Debian 13 | `veemeeter_0.2.0-1.debian13_amd64.deb` | `sudo apt install ./veemeeter_0.2.0-1.debian13_amd64.deb` |
+| Ubuntu 24.04 LTS | `veemeeter_0.2.0-1.ubuntu24.04_amd64.deb` | `sudo apt install ./veemeeter_0.2.0-1.ubuntu24.04_amd64.deb` |
+| Ubuntu (latest) | `veemeeter_0.2.0-1.ubuntu26.10_amd64.deb` | `sudo apt install ./veemeeter_0.2.0-1.ubuntu26.10_amd64.deb` |
+| Fedora | `veemeeter-0.2.0-1.fedora45.x86_64.rpm` | `sudo dnf install ./veemeeter-0.2.0-1.fedora45.x86_64.rpm` |
+| Arch Linux | `veemeeter-0.2.0-arch-x86_64.tar.gz` | `sudo tar -xzf veemeeter-0.2.0-arch-x86_64.tar.gz -C /` |
+| NixOS / Nix | — | `nix run github:Kisakay/VeeMeeter/v0.2.0`, or the flake's NixOS / home-manager module |
+
+Check your download with `sha256sum -c --ignore-missing SHA256SUMS`.
+
 ## [0.1.0] - 2026-11-11
 
 The first release of VeeMeeter, a from-scratch Rust rewrite of PulseMeeter:
@@ -56,4 +102,5 @@ the Nix package already includes it.
 - A hardware output stays awake while something is routed to it.
 - x86_64 packages only for now (the Nix flake also builds on aarch64).
 
+[0.2.0]: https://github.com/Kisakay/VeeMeeter/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Kisakay/VeeMeeter/releases/tag/v0.1.0
