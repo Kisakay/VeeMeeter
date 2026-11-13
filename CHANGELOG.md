@@ -2,6 +2,34 @@
 
 All notable changes to VeeMeeter. Versions follow [SemVer](https://semver.org/).
 
+## [0.2.1] - 2026-11-13
+
+### Added
+
+- **Start on tray now works at login** — turning it on adds a session
+  autostart entry (`~/.config/autostart/veemeeter.desktop`) that runs
+  `veemeeter tray --wait`; turning it off removes it. `--wait` keeps the
+  tray waiting for the panel when it starts after the apps.
+
+### Changed
+
+- The tray only draws and sends a new image of Mimi when she actually
+  moves: a still Mimi costs nothing.
+- README: the binary is 13 MB since the tray (it said 9.6 MB).
+
+### Install
+
+| Distribution | File | Command |
+|---|---|---|
+| Debian 13 | `veemeeter_0.2.1-1.debian13_amd64.deb` | `sudo apt install ./veemeeter_0.2.1-1.debian13_amd64.deb` |
+| Ubuntu 24.04 LTS | `veemeeter_0.2.1-1.ubuntu24.04_amd64.deb` | `sudo apt install ./veemeeter_0.2.1-1.ubuntu24.04_amd64.deb` |
+| Ubuntu (latest) | `veemeeter_0.2.1-1.ubuntu26.10_amd64.deb` | `sudo apt install ./veemeeter_0.2.1-1.ubuntu26.10_amd64.deb` |
+| Fedora | `veemeeter-0.2.1-1.fedora45.x86_64.rpm` | `sudo dnf install ./veemeeter-0.2.1-1.fedora45.x86_64.rpm` |
+| Arch Linux | `veemeeter-0.2.1-arch-x86_64.tar.gz` | `sudo tar -xzf veemeeter-0.2.1-arch-x86_64.tar.gz -C /` |
+| NixOS / Nix | — | `nix run github:Kisakay/VeeMeeter/v0.2.1`, or the flake's NixOS / home-manager module |
+
+Check your download with `sha256sum -c --ignore-missing SHA256SUMS`.
+
 ## [0.2.0] - 2026-11-13
 
 Mimi moves into your system tray, and VeeMeeter gets virtual cables.
@@ -102,5 +130,6 @@ the Nix package already includes it.
 - A hardware output stays awake while something is routed to it.
 - x86_64 packages only for now (the Nix flake also builds on aarch64).
 
+[0.2.1]: https://github.com/Kisakay/VeeMeeter/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Kisakay/VeeMeeter/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Kisakay/VeeMeeter/releases/tag/v0.1.0

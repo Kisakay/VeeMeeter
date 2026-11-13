@@ -3,7 +3,7 @@
 ```text
 veemeeter                 open the mixer window (starts the daemon if needed)
 veemeeter gui [--no-spawn] [--no-tray]
-veemeeter tray [--no-spawn]  Mimi in the system tray only, no window
+veemeeter tray [--no-spawn] [--wait]  Mimi in the system tray only, no window
 veemeeter daemon [--config <path>]
 veemeeter ctl [--json] <command> …
 ```

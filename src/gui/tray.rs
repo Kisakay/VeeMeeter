@@ -25,7 +25,9 @@ const NAP_AFTER: Duration = Duration::from_secs(30);
 
 /// Lance le tray. `Err` : pas de tray possible (rôle déjà pris, ou aucun
 /// StatusNotifierWatcher sur le bureau) ; l'appelant peut ouvrir la fenêtre.
-pub fn run(spawn_daemon: bool) -> Result<i32, String> {
+/// `wait_for_host` : ne pas exiger de panneau tout de suite (ouverture de
+/// session : le panneau démarre parfois après les applications).
+pub fn run(spawn_daemon: bool, wait_for_host: bool) -> Result<i32, String> {
     let lock = instance::claim("tray").ok_or("the tray is already running")?;
     instance::listen(lock, |_| {});
 
@@ -33,19 +35,20 @@ pub fn run(spawn_daemon: bool) -> Result<i32, String> {
     let sprites = Sprites::load();
     let quit = Arc::new(AtomicBool::new(false));
     let tray = VeeTray {
-        icon: sprites.frame(Mood::Sleepy, 0.0, 0.0, 0.0),
+        icon: sprites.frame(Pose::new(Mood::Sleepy, 0.0, 0.0, 0.0)),
         tooltip: "Waking the audio engine up…".into(),
         start_on_tray: Settings::load().start_on_tray,
         spawn_daemon,
         children: Vec::new(),
         quit: quit.clone(),
     };
-    let handle = tray.spawn().map_err(|e| format!("no system tray available: {e}"))?;
+    let handle =
+        tray.assume_sni_available(wait_for_host).spawn().map_err(|e| format!("no system tray available: {e}"))?;
     start_connection(shared.clone(), || {}, spawn_daemon);
 
     let mut anim = Anim::new();
     let mut last = Instant::now();
-    let mut shown = (Vec::new(), String::new());
+    let mut shown: Option<(Pose, String)> = None;
     let mut reaped = Instant::now();
     while !quit.load(Ordering::Relaxed) && !handle.is_closed() {
         std::thread::sleep(FRAME);
@@ -53,11 +56,13 @@ pub fn run(spawn_daemon: bool) -> Result<i32, String> {
         last = Instant::now();
         let (connected, error, level) = read_levels(&shared);
         let (mood, tooltip) = anim.step(dt, connected, error, level);
-        let icon = sprites.frame(mood, anim.hop, anim.squash, anim.env);
-        // Chaque `update` repasse sur toutes les propriétés D-Bus : seulement
-        // quand l'image ou la bulle change.
-        if icon.data != shown.0 || tooltip != shown.1 {
-            shown = (icon.data.clone(), tooltip.clone());
+        // Image dessinée et envoyée (chaque `update` repasse sur toutes les
+        // propriétés D-Bus) seulement quand la pose ou la bulle change :
+        // Mimi immobile ne coûte rien.
+        let pose = Pose::new(mood, anim.hop, anim.squash, anim.env);
+        if shown.as_ref() != Some(&(pose, tooltip.clone())) {
+            shown = Some((pose, tooltip.clone()));
+            let icon = sprites.frame(pose);
             handle.update(|t| {
                 t.icon = icon;
                 t.tooltip = tooltip;
@@ -157,6 +162,40 @@ impl Anim {
     }
 }
 
+/// Paramètres d'une image, quantifiés au pixel près : deux poses égales
+/// donnent la même image.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Pose {
+    mood: Mood,
+    /// Hauteur du saut, en pixels de l'icône.
+    lift: u8,
+    /// Écrasement, en dixièmes.
+    squash: u8,
+    /// Hauteur des barres d'égaliseur (0 : pas de barres).
+    bars: [u8; 3],
+}
+
+impl Pose {
+    fn new(mood: Mood, hop: f32, squash: f32, env: f32) -> Pose {
+        let hop = hop.clamp(0.0, 1.0);
+        let bars = if env > 0.05 {
+            let wobble = [0.75, 1.0, 0.6];
+            std::array::from_fn(|i| {
+                let phase = if i == 1 { 1.0 - hop * 0.5 } else { 0.7 + hop * 0.3 };
+                ((env * wobble[i] * phase) * 22.0).round().clamp(2.0, 22.0) as u8
+            })
+        } else {
+            [0; 3]
+        };
+        Pose {
+            mood,
+            lift: (hop * ICON as f32 * 0.12).round() as u8,
+            squash: (squash.clamp(0.0, 1.0) * 10.0).round() as u8,
+            bars,
+        }
+    }
+}
+
 /// Mimi pré-décodée (RGBA prémultiplié, recadrée), une image par humeur.
 struct Sprites {
     size: usize,
@@ -211,15 +250,15 @@ impl Sprites {
 
     /// Image ARGB32 (ordre réseau) : Mimi posée au bas de l'icône, soulevée
     /// de `hop`, écrasée de `squash`, avec un égaliseur quand ça joue.
-    fn frame(&self, mood: Mood, hop: f32, squash: f32, env: f32) -> ksni::Icon {
-        let src = &self.moods.iter().find(|(m, _)| *m == mood).expect("every mood is loaded").1;
+    fn frame(&self, pose: Pose) -> ksni::Icon {
+        let src = &self.moods.iter().find(|(m, _)| *m == pose.mood).expect("every mood is loaded").1;
         let n = ICON as f32;
         let base = n * 0.86;
+        let squash = pose.squash as f32 / 10.0;
         let w = base * (1.0 + 0.12 * squash);
         let h = base * (1.0 - 0.12 * squash);
         let x0 = (n - w) / 2.0;
-        // Quantifié au pixel : moins d'images différentes → moins de trafic D-Bus.
-        let y0 = (n - h - hop.min(1.0) * n * 0.12).round();
+        let y0 = (n - h).round() - pose.lift as f32;
         let mut out = vec![[0.0f32; 4]; ICON * ICON];
         let s = self.size as f32;
         for py in 0..ICON {
@@ -237,9 +276,7 @@ impl Sprites {
                 out[py * ICON + px] = box_average(src, self.size, u0, u1, v0, v1);
             }
         }
-        if env > 0.05 {
-            draw_eq(&mut out, env, hop);
-        }
+        draw_eq(&mut out, pose.bars);
         let mut data = Vec::with_capacity(ICON * ICON * 4);
         for [r, g, b, a] in out {
             let un = |c: f32| if a > 0.0 { (c / a).clamp(0.0, 255.0) as u8 } else { 0 };
@@ -271,13 +308,11 @@ fn box_average(src: &[[f32; 4]], size: usize, u0: f32, u1: f32, v0: f32, v1: f32
 }
 
 /// Trois barres d'égaliseur dans le coin, qui suivent le volume.
-fn draw_eq(out: &mut [[f32; 4]], env: f32, hop: f32) {
+fn draw_eq(out: &mut [[f32; 4]], bars: [u8; 3]) {
     // Couleurs du thème : menthe, rose, lavande.
     const COLORS: [[f32; 3]; 3] = [[127.0, 224.0, 194.0], [255.0, 143.0, 184.0], [185.0, 163.0, 245.0]];
-    let wobble = [0.75, 1.0, 0.6];
     for (i, color) in COLORS.iter().enumerate() {
-        let phase = if i == 1 { 1.0 - hop.min(1.0) * 0.5 } else { 0.7 + hop.min(1.0) * 0.3 };
-        let height = ((env * wobble[i] * phase) * 22.0).round().max(2.0) as usize;
+        let height = bars[i] as usize;
         let x = ICON - 15 + i * 5;
         for y in ICON - height..ICON {
             for dx in 0..4 {
@@ -423,13 +458,15 @@ mod tests {
     #[test]
     fn frames_are_argb_and_move_with_the_music() {
         let s = Sprites::load();
-        let still = s.frame(Mood::Wave, 0.0, 0.0, 0.0);
+        let still = s.frame(Pose::new(Mood::Wave, 0.0, 0.0, 0.0));
         assert_eq!(still.data.len(), ICON * ICON * 4);
         // Coins du haut transparents, Mimi bien présente.
         assert_eq!(still.data[0], 0);
         assert!(still.data.chunks_exact(4).filter(|p| p[0] > 200).count() > ICON * ICON / 4);
-        let jump = s.frame(Mood::Happy, 1.0, 0.0, 0.8);
+        let jump = s.frame(Pose::new(Mood::Happy, 1.0, 0.0, 0.8));
         assert_ne!(still.data, jump.data);
+        // Silence : petites variations invisibles → même pose, rien à redessiner.
+        assert_eq!(Pose::new(Mood::Wave, 0.001, 0.01, 0.02), Pose::new(Mood::Wave, 0.0, 0.0, 0.0));
     }
 
     #[test]

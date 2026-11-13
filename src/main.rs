@@ -54,6 +54,9 @@ struct TrayArgs {
     /// do not start the daemon automatically
     #[argh(switch)]
     no_spawn: bool,
+    /// wait for a system tray to appear instead of exiting (login autostart)
+    #[argh(switch)]
+    wait: bool,
 }
 
 fn main() {
@@ -69,7 +72,7 @@ fn main() {
         },
         Some(Sub::Ctl(a)) => ctl::run(a),
         Some(Sub::Gui(a)) => gui::launch(!a.no_spawn, !a.no_tray),
-        Some(Sub::Tray(a)) => gui::tray::run(!a.no_spawn).unwrap_or_else(|e| {
+        Some(Sub::Tray(a)) => gui::tray::run(!a.no_spawn, a.wait).unwrap_or_else(|e| {
             log::error!("{e}");
             1
         }),

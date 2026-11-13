@@ -70,7 +70,7 @@ repairs the graph by itself when a device comes and goes.
   fights your sound settings.
 - ❄️ **NixOS ready** — flake with package, overlay, NixOS module and
   home-manager module, plus a hardened systemd user service.
-- 🪶 **Light** — one 9.6 MB binary (engine, window and CLI), egui on OpenGL,
+- 🪶 **Light** — one 13 MB binary (engine, window and CLI), egui on OpenGL,
   no web runtime.
 
 ## Use cases

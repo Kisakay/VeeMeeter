@@ -40,8 +40,9 @@ pub fn launch(spawn: bool, with_tray: bool) -> i32 {
     if instance::tell_gui(instance::Order::Show) {
         return 0;
     }
+    settings::Settings::load().sync_autostart();
     if with_tray && settings::Settings::load().start_on_tray && !instance::running("tray") {
-        match tray::run(spawn) {
+        match tray::run(spawn, false) {
             Ok(code) => return code,
             Err(e) => log::warn!("{e}; opening the window instead"),
         }
@@ -359,9 +360,14 @@ impl App {
                 });
                 ui.toggle_value(&mut self.show_apps, "Applications");
             });
-            egui::containers::menu::MenuButton::new(RichText::new("Vee").color(T.muted))
+            let vee = egui::containers::menu::MenuButton::new(RichText::new("Vee").color(T.muted))
                 .config(sticky_menu())
-                .ui(ui, |ui| self.vee_menu(ui));
+                .ui(ui, |ui| self.vee_menu(ui))
+                .0;
+            if vee.clicked() {
+                // Le tray a pu changer l'option depuis le dernier affichage.
+                self.settings = settings::Settings::load();
+            }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let (dot, text) = match (connected, st) {
                     (true, Some(s)) => (T.meter_low, format!("PipeWire {}", s.pipewire_version)),
@@ -387,14 +393,12 @@ impl App {
     /// Menu « Vee » : préférences de l'interface et liens du projet.
     fn vee_menu(&mut self, ui: &mut Ui) {
         ui.set_min_width(220.0);
-        // Relu à l'ouverture : le tray a pu changer l'option entre-temps.
-        if ui.ctx().input(|i| i.pointer.any_pressed()) {
-            self.settings = settings::Settings::load();
-        }
         let mut on = self.settings.start_on_tray;
         if ui
             .checkbox(&mut on, RichText::new("Start on tray").color(T.text))
-            .on_hover_text("Next launch shows only Mimi in the system tray; click her to open the mixer")
+            .on_hover_text(
+                "Mimi starts in the system tray when you log in or launch VeeMeeter; click her to open the mixer",
+            )
             .changed()
         {
             self.settings.start_on_tray = on;

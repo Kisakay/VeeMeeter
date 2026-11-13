@@ -106,7 +106,7 @@ seconds of silence (or when the engine is stopped).
 | Action | What it does |
 |---|---|
 | Click on Mimi / **Open Vee** | Opens the mixer window, or brings it back. |
-| **Start on tray** | On the next launch, only Mimi shows up in the tray; launching VeeMeeter again opens the window. |
+| **Start on tray** | Mimi shows up in the tray when you log in, and when you launch VeeMeeter (launch it again to open the window). |
 | **Open GitHub** | The project page. |
 | **Report an issue** | The GitHub issue form. |
 | **Close Vee** | Closes the window and the tray. The routing keeps going (use *Stop engine* for that). |
@@ -123,4 +123,8 @@ tray.
     window.
 
 The option is stored in `$XDG_CONFIG_HOME/veemeeter/gui.toml`
-(`start_on_tray = true`).
+(`start_on_tray = true`). Turning it on also adds
+`$XDG_CONFIG_HOME/autostart/veemeeter.desktop`, which runs
+`veemeeter tray --wait` at login (`--wait`: the panel may start after the
+apps); turning it off removes it. An entry you wrote yourself at that path
+is never changed.
