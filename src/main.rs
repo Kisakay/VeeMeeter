@@ -22,6 +22,7 @@ struct Args {
 enum Sub {
     Daemon(DaemonArgs),
     Gui(GuiArgs),
+    Tray(TrayArgs),
     Ctl(ctl::CtlArgs),
 }
 
@@ -41,6 +42,18 @@ struct GuiArgs {
     /// do not start the daemon automatically
     #[argh(switch)]
     no_spawn: bool,
+    /// do not put Mimi in the system tray
+    #[argh(switch)]
+    no_tray: bool,
+}
+
+/// Show Mimi in the system tray only (no window); she dances to the music.
+#[derive(FromArgs)]
+#[argh(subcommand, name = "tray")]
+struct TrayArgs {
+    /// do not start the daemon automatically
+    #[argh(switch)]
+    no_spawn: bool,
 }
 
 fn main() {
@@ -55,8 +68,12 @@ fn main() {
             }
         },
         Some(Sub::Ctl(a)) => ctl::run(a),
-        Some(Sub::Gui(a)) => gui::run(!a.no_spawn),
-        None => gui::run(true),
+        Some(Sub::Gui(a)) => gui::launch(!a.no_spawn, !a.no_tray),
+        Some(Sub::Tray(a)) => gui::tray::run(!a.no_spawn).unwrap_or_else(|e| {
+            log::error!("{e}");
+            1
+        }),
+        None => gui::launch(true, true),
     };
     std::process::exit(code);
 }

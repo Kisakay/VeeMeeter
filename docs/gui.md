@@ -16,6 +16,7 @@ window starts it and shows a sleepy Mimi (*Mimi is waking the audio engine up…
 |---|---|
 | **+ Add** | Adds a strip: *Hardware input*, *Virtual input*, *Hardware output* or *Virtual output*. Hardware strips pick the first device not used yet. |
 | **Applications** | Shows the applications panel (see below). |
+| **Vee** | *Start on tray*, and links to GitHub and to the issue form. |
 | **Stop engine** | Stops the daemon. Every VeeMeeter device disappears until it is started again. |
 | Status dot | Green with the PipeWire version when connected; otherwise the connection status. |
 
@@ -94,3 +95,32 @@ output, or both straight to a real device.
 - Hardware inputs are wrapped in a hidden internal node, so VeeMeeter's
   microphone fader never changes your system microphone volume.
 - Closing the window keeps the routing alive: the daemon does the audio.
+
+## System tray
+
+Mimi also lives in the system tray, and she dances to what comes out of your
+outputs: she hops on the beats, higher when it's loud, little equalizer bars
+pop up next to her, she cheers when it gets loud and dozes off after 30
+seconds of silence (or when the engine is stopped).
+
+| Action | What it does |
+|---|---|
+| Click on Mimi / **Open Vee** | Opens the mixer window, or brings it back. |
+| **Start on tray** | On the next launch, only Mimi shows up in the tray; launching VeeMeeter again opens the window. |
+| **Open GitHub** | The project page. |
+| **Report an issue** | The GitHub issue form. |
+| **Close Vee** | Closes the window and the tray. The routing keeps going (use *Stop engine* for that). |
+
+The tray is its own process (`veemeeter tray`), started with the window and
+kept when you close it. Launching `veemeeter` while a window is open just
+brings that window back. `veemeeter gui --no-tray` opens a window without the
+tray.
+
+!!! note "Desktops without a tray"
+    The icon uses the StatusNotifierItem protocol (KDE, COSMIC, Xfce,
+    waybar…). On GNOME it needs the *AppIndicator and KStatusNotifierItem
+    Support* extension. Without a tray, *Start on tray* falls back to the
+    window.
+
+The option is stored in `$XDG_CONFIG_HOME/veemeeter/gui.toml`
+(`start_on_tray = true`).

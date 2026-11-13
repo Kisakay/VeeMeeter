@@ -21,6 +21,8 @@ log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color", "humantime"] }
 anyhow = "1"
 png = "0.18"
+# Icône de zone de notification (StatusNotifierItem, D-Bus pur Rust, sans GTK).
+ksni = { version = "0.3", default-features = false, features = ["blocking", "async-io"] }
 
 [profile.release]
 lto = "thin"

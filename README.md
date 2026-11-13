@@ -58,6 +58,8 @@ repairs the graph by itself when a device comes and goes.
 - ⭐ **System default** — make a virtual input your default output and a
   virtual output your default microphone; desktop volume keys and
   pavucontrol move VeeMeeter's fader too.
+- 🌙 **Tray icon** — Mimi dances in your system tray to whatever is playing;
+  *Start on tray* to launch straight there.
 - 🔌 **Self-healing graph** — the engine reconciles the wanted graph against
   the real one on every change: plug your USB headset back in and its routes
   come back by themselves.
@@ -239,7 +241,6 @@ PulseMeeter is the project that inspired VeeMeeter. The main differences:
 ## Roadmap
 
 - 📦 More architectures (aarch64 packages) and distro repositories
-- 🌙 Tray icon (global shortcuts already work: bind `veemeeter ctl …`, see the [CLI docs](https://veemeter.v.bzh/cli/#keyboard-shortcuts))
 
 Known limits today: VeeMeeter needs a PipeWire session manager
 (WirePlumber), like any PipeWire desktop; a routed hardware output stays

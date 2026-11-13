@@ -1,8 +1,11 @@
 //! Fenêtre de mixage (egui, rendu OpenGL natif). Simple client du daemon :
 //! tout l'état vient du socket, chaque geste devient une `Command`.
 
+mod instance;
 mod mascot;
+mod settings;
 mod theme;
+pub mod tray;
 
 use crate::ipc::{self, Client};
 use crate::model::*;
@@ -30,7 +33,49 @@ struct Shared {
     status: String,
 }
 
-pub fn run(spawn: bool) -> i32 {
+/// Point d'entrée de `veemeeter` / `veemeeter gui` : ramène la fenêtre si
+/// elle est déjà ouverte, sinon démarre dans le tray (option « Start on
+/// tray ») ou ouvre la fenêtre, avec le tray à côté.
+pub fn launch(spawn: bool, with_tray: bool) -> i32 {
+    if instance::tell_gui(instance::Order::Show) {
+        return 0;
+    }
+    if with_tray && settings::Settings::load().start_on_tray && !instance::running("tray") {
+        match tray::run(spawn) {
+            Ok(code) => return code,
+            Err(e) => log::warn!("{e}; opening the window instead"),
+        }
+    }
+    if with_tray && !instance::running("tray") {
+        spawn_tray(spawn);
+    }
+    run(spawn)
+}
+
+/// Le tray vit dans son propre processus : il survit à la fenêtre.
+fn spawn_tray(spawn: bool) {
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command as Proc, Stdio};
+    let Ok(exe) = std::env::current_exe() else { return };
+    let mut cmd = Proc::new(exe);
+    cmd.arg("tray");
+    if !spawn {
+        cmd.arg("--no-spawn");
+    }
+    let r = cmd.stdin(Stdio::null()).stdout(Stdio::null()).process_group(0).spawn();
+    match r {
+        // Récolté en arrière-plan pour ne pas laisser de zombie si la fenêtre dure.
+        Ok(mut c) => drop(std::thread::spawn(move || c.wait())),
+        Err(e) => log::warn!("cannot start the tray: {e}"),
+    }
+}
+
+fn run(spawn: bool) -> i32 {
+    let Some(listener) = instance::claim("gui") else {
+        // Une autre fenêtre vient de s'ouvrir entre-temps.
+        instance::tell_gui(instance::Order::Show);
+        return 0;
+    };
     let shared = Arc::new(Mutex::new(Shared { status: "connecting…".into(), ..Default::default() }));
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -45,7 +90,19 @@ pub fn run(spawn: bool) -> i32 {
         options,
         Box::new(move |cc| {
             theme::apply(&cc.egui_ctx);
-            start_connection(shared.clone(), cc.egui_ctx.clone(), spawn);
+            let ctx = cc.egui_ctx.clone();
+            start_connection(shared.clone(), move || ctx.request_repaint(), spawn);
+            let ctx = cc.egui_ctx.clone();
+            instance::listen(listener, move |order| {
+                match order {
+                    instance::Order::Show => {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                    }
+                    instance::Order::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                }
+                ctx.request_repaint();
+            });
             let mimi = Mimi::load(&cc.egui_ctx);
             Ok(Box::new(App::new(shared, mimi)))
         }),
@@ -61,7 +118,7 @@ pub fn run(spawn: bool) -> i32 {
 
 /// Thread de connexion : se (re)connecte au daemon, le démarre au besoin,
 /// et range chaque message dans l'état partagé.
-fn start_connection(shared: Arc<Mutex<Shared>>, ctx: egui::Context, spawn: bool) {
+fn start_connection(shared: Arc<Mutex<Shared>>, notify: impl Fn() + Send + 'static, spawn: bool) {
     std::thread::Builder::new()
         .name("daemon-link".into())
         .spawn(move || {
@@ -92,13 +149,14 @@ fn start_connection(shared: Arc<Mutex<Shared>>, ctx: egui::Context, spawn: bool)
                                 Err(_) => break,
                             }
                             drop(s);
-                            ctx.request_repaint();
+                            notify();
                         }
                         let mut s = shared.lock().unwrap();
                         s.sender = None;
                         s.connected = false;
                         s.status = "daemon stopped — reconnecting…".into();
-                        ctx.request_repaint();
+                        drop(s);
+                        notify();
                     }
                     Err(_) => {
                         let due = spawned_at.is_none_or(|t| t.elapsed() > Duration::from_secs(10));
@@ -109,7 +167,7 @@ fn start_connection(shared: Arc<Mutex<Shared>>, ctx: egui::Context, spawn: bool)
                                 Err(e) => format!("cannot start the daemon: {e}"),
                             };
                             shared.lock().unwrap().status = msg;
-                            ctx.request_repaint();
+                            notify();
                         }
                     }
                 }
@@ -161,6 +219,7 @@ struct App {
     meters: HashMap<(String, usize), MeterView>,
     rename: HashMap<String, String>,
     show_apps: bool,
+    settings: settings::Settings,
     last_frame: Instant,
 }
 
@@ -175,6 +234,7 @@ impl App {
             meters: HashMap::new(),
             rename: HashMap::new(),
             show_apps: true,
+            settings: settings::Settings::load(),
             last_frame: Instant::now(),
         }
     }
@@ -299,6 +359,9 @@ impl App {
                 });
                 ui.toggle_value(&mut self.show_apps, "Applications");
             });
+            egui::containers::menu::MenuButton::new(RichText::new("Vee").color(T.muted))
+                .config(sticky_menu())
+                .ui(ui, |ui| self.vee_menu(ui));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let (dot, text) = match (connected, st) {
                     (true, Some(s)) => (T.meter_low, format!("PipeWire {}", s.pipewire_version)),
@@ -319,6 +382,33 @@ impl App {
                 }
             });
         });
+    }
+
+    /// Menu « Vee » : préférences de l'interface et liens du projet.
+    fn vee_menu(&mut self, ui: &mut Ui) {
+        ui.set_min_width(220.0);
+        // Relu à l'ouverture : le tray a pu changer l'option entre-temps.
+        if ui.ctx().input(|i| i.pointer.any_pressed()) {
+            self.settings = settings::Settings::load();
+        }
+        let mut on = self.settings.start_on_tray;
+        if ui
+            .checkbox(&mut on, RichText::new("Start on tray").color(T.text))
+            .on_hover_text("Next launch shows only Mimi in the system tray; click her to open the mixer")
+            .changed()
+        {
+            self.settings.start_on_tray = on;
+            settings::Settings::set_start_on_tray(on);
+        }
+        ui.separator();
+        if ui.button("Open GitHub").clicked() {
+            tray::open_url(tray::REPO_URL);
+            ui.close();
+        }
+        if ui.button("Report an issue").clicked() {
+            tray::open_url(tray::ISSUE_URL);
+            ui.close();
+        }
     }
 
     fn add_strip(&self, kind: Kind, st: Option<&Snapshot>) {
@@ -822,11 +912,11 @@ impl App {
 }
 
 /// Amplitude crête → position 0..1 sur l'échelle du VU-mètre.
-fn meter_pos(amp: f32) -> f32 {
+pub(crate) fn meter_pos(amp: f32) -> f32 {
     if amp <= 0.0 { 0.0 } else { meter_pos_db(20.0 * amp.log10()) }
 }
 
-fn meter_pos_db(db: f32) -> f32 {
+pub(crate) fn meter_pos_db(db: f32) -> f32 {
     ((db - METER_FLOOR) / (METER_TOP - METER_FLOOR)).clamp(0.0, 1.0)
 }
 
