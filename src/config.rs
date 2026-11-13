@@ -111,11 +111,7 @@ impl Config {
                 s.routes.clear();
                 s.sends.clear();
             }
-            let slot = match s.kind {
-                Kind::VirtualIn => Some(0),
-                Kind::VirtualOut => Some(1),
-                _ => None,
-            };
+            let slot = s.kind.default_role().map(|sink| if sink { 0 } else { 1 });
             match slot {
                 Some(i) if s.primary && !primary_seen[i] => primary_seen[i] = true,
                 _ => s.primary = false,
@@ -262,11 +258,11 @@ impl Config {
             }
             Command::Primary { id } => {
                 let kind = self.get(id).ok_or_else(|| format!("unknown strip {id}"))?.kind;
-                if kind.is_hardware() || kind == Kind::Cable {
-                    return Err("only virtual inputs and outputs can be the system default".into());
-                }
+                let role = kind.default_role().ok_or("a cable cannot be the system default (use its two sides)")?;
+                // Un seul défaut par rôle : une sortie (entrée virtuelle OU sortie
+                // matérielle) et un micro (sortie virtuelle OU entrée matérielle).
                 let mut changed = false;
-                for s in self.strips.iter_mut().filter(|s| s.kind == kind) {
+                for s in self.strips.iter_mut().filter(|s| s.kind.default_role() == Some(role)) {
                     let p = s.id == *id;
                     changed |= s.primary != p;
                     s.primary = p;
@@ -389,12 +385,12 @@ mod tests {
     }
 
     #[test]
-    fn primary_is_exclusive_per_kind() {
+    fn primary_is_exclusive_per_role() {
         let mut c = Config::first_run();
         c.apply(&Command::Primary { id: "vi2".into() }).unwrap();
         assert!(!c.get("vi1").unwrap().primary && c.get("vi2").unwrap().primary);
+        // L'autre rôle (micro) ne bouge pas.
         assert!(c.get("b1").unwrap().primary);
-        assert!(c.apply(&Command::Primary { id: "hi1".into() }).is_err());
     }
 
     #[test]
@@ -465,6 +461,23 @@ mod tests {
         c.apply(&Command::Send { from: "vi1".into(), to: "a1".into(), db: -3.0 }).unwrap();
         c.apply(&Command::Remove { id: "a1".into() }).unwrap();
         assert!(c.get("vi1").unwrap().sends.is_empty());
+    }
+
+    #[test]
+    fn hardware_strips_can_be_the_default() {
+        let mut c = Config::first_run();
+        // Le micro matériel devient le micro par défaut, à la place du micro virtuel.
+        assert!(c.apply(&Command::Primary { id: "hi1".into() }).unwrap());
+        assert!(c.get("hi1").unwrap().primary && !c.get("b1").unwrap().primary);
+        // La sortie matérielle remplace l'entrée virtuelle comme sortie par défaut ;
+        // le micro, lui, ne bouge pas.
+        assert!(c.apply(&Command::Primary { id: "a1".into() }).unwrap());
+        assert!(c.get("a1").unwrap().primary && !c.get("vi1").unwrap().primary);
+        assert!(c.get("hi1").unwrap().primary);
+        // Survit à une relecture du fichier.
+        let before = c.clone();
+        c.sanitize();
+        assert_eq!(c, before);
     }
 
     #[test]

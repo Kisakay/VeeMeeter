@@ -561,7 +561,7 @@ impl App {
                         if mute.clicked() {
                             self.send(Command::Mute { id: x.id.clone(), mute: Some(!x.mute) });
                         }
-                        if !x.kind.is_hardware() && x.kind != Kind::Cable {
+                        if let Some(sink_role) = x.kind.default_role() {
                             let star = ui.add(
                                 egui::Button::new(
                                     RichText::new(if s.is_default { "DEFAULT" } else { "default" })
@@ -572,10 +572,11 @@ impl App {
                                 .fill(if s.is_default { T.star } else { T.card_hi })
                                 .min_size(vec2(58.0, 26.0)),
                             );
-                            let star = star.on_hover_text(if x.kind.is_input() {
-                                "Make this the system default output (apps play here)"
-                            } else {
-                                "Make this the system default microphone"
+                            let star = star.on_hover_text(match (sink_role, x.kind.is_hardware()) {
+                                (true, false) => "Make this the system default output (apps play here)",
+                                (true, true) => "Make this the system default output: apps play through this output's fader and effects",
+                                (false, false) => "Make this the system default microphone",
+                                (false, true) => "Make this the system default microphone: apps hear it after its fader, mute and effects",
                             });
                             if star.clicked() {
                                 self.send(Command::Primary { id: x.id.clone() });

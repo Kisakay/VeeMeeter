@@ -94,10 +94,20 @@ flowchart LR
 
 ## The default device star
 
-Virtual strips can carry a star: the starred virtual input is the system
-**default output**, the starred virtual output is the system **default input**.
-Volume keys and pavucontrol stay in sync with the starred virtual input's
-fader, in both directions.
+Any strip except a cable can be the system default — one **default output**
+and one **default microphone** at a time:
+
+| Strip | Becomes | What apps see |
+|---|---|---|
+| virtual input | default output | the strip itself |
+| hardware output | default output | **"<name> (VeeMeeter)"**, which feeds that output through its fader and effects |
+| virtual output | default microphone | the strip itself |
+| hardware input | default microphone | **"<name> (VeeMeeter)"**: your mic *after* its fader, mute and effects |
+
+A hardware strip's own node stays hidden (so VeeMeeter never fights your
+sound settings); the "(VeeMeeter)" device only exists while the strip is the
+default. Volume keys and pavucontrol stay in sync with a default virtual
+input's fader, in both directions.
 
 ## Daemon and window
 

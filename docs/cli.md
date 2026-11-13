@@ -74,8 +74,9 @@ veemeeter ctl route vi1 b1       # toggle
 veemeeter ctl default vi2        # apps now play into "Voice chat"
 ```
 
-Makes a virtual strip the system default output (virtual input) or default
-microphone (virtual output).
+Makes a strip the system default output (virtual input, hardware output) or
+default microphone (virtual output, hardware input — e.g.
+`veemeeter ctl default hi1`). Cables cannot be the default.
 
 ### `add <kind> <name> [--device <node>] [--layout <layout>]`
 

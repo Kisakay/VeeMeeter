@@ -43,10 +43,12 @@ VU meter
     quieter in your virtual mic than in your headphones. The button then
     shows the level (`B1 -12`).
 
-**default** *(virtual strips only)*
-:   Makes the strip the system default: a virtual input becomes the default
-    **output** (apps play there), a virtual output becomes the default
-    **microphone**. The starred strip shows **DEFAULT**.
+**default** *(every strip but cables)*
+:   Makes the strip the system default: an input virtual strip or a hardware
+    output becomes the default **output**, a virtual output or a hardware
+    input (your mic, with its fader and effects) becomes the default
+    **microphone**. The default strip shows **DEFAULT**. See
+    [the default device](concepts.md#the-default-device-star).
 
 Device picker *(hardware strips only)*
 :   Chooses the real device. An unplugged device shows *(unplugged)*; the strip

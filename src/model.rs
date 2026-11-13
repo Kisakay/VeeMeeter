@@ -32,6 +32,17 @@ impl Kind {
         matches!(self, Kind::HardwareIn | Kind::VirtualIn | Kind::Cable)
     }
 
+    /// Rôle possible comme périphérique par défaut du système :
+    /// `Some(true)` = sortie (les applis y jouent), `Some(false)` = micro.
+    /// Un câble a déjà ses deux côtés visibles : il n'en a pas.
+    pub fn default_role(self) -> Option<bool> {
+        match self {
+            Kind::VirtualIn | Kind::HardwareOut => Some(true),
+            Kind::VirtualOut | Kind::HardwareIn => Some(false),
+            Kind::Cable => None,
+        }
+    }
+
     pub fn is_hardware(self) -> bool {
         matches!(self, Kind::HardwareIn | Kind::HardwareOut)
     }

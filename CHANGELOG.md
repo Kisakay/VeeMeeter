@@ -2,6 +2,16 @@
 
 All notable changes to VeeMeeter. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Hardware strips can be the system default.** A hardware input becomes
+  the default microphone through a visible "<name> (VeeMeeter)" device, fed
+  after its fader, mute and effects; a hardware output becomes the default
+  output through a "<name> (VeeMeeter)" device that feeds it. Still one
+  default output and one default microphone at a time; cables excluded.
+
 ## [0.2.1] - 2026-11-13
 
 ### Added

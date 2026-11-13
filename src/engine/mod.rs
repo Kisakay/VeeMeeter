@@ -50,6 +50,34 @@ fn cable_out_name(id: &str) -> String {
     format!("{PREFIX}{id}.out")
 }
 
+/// Sortie visible qui alimente une sortie matérielle choisie comme défaut.
+fn hw_in_name(id: &str) -> String {
+    format!("{PREFIX}{id}.in")
+}
+
+/// Périphérique visible qui représente un strip auprès des applications :
+/// lui-même pour un strip virtuel, son compagnon pour un strip matériel
+/// (le nœud du strip est interne, invisible des applis).
+fn public_name(s: &Strip) -> String {
+    match s.kind {
+        Kind::HardwareIn | Kind::Cable => cable_out_name(&s.id),
+        Kind::HardwareOut => hw_in_name(&s.id),
+        Kind::VirtualIn | Kind::VirtualOut => node_name(&s.id),
+    }
+}
+
+/// Le strip a besoin d'un compagnon visible : `(nom, classe, description)`.
+fn companion(s: &Strip) -> Option<(String, &'static str, String)> {
+    match s.kind {
+        Kind::Cable => Some((cable_out_name(&s.id), "Audio/Source/Virtual", format!("{} (output)", s.name))),
+        Kind::HardwareIn if s.primary => {
+            Some((cable_out_name(&s.id), "Audio/Source/Virtual", format!("{} (VeeMeeter)", s.name)))
+        }
+        Kind::HardwareOut if s.primary => Some((hw_in_name(&s.id), "Audio/Sink", format!("{} (VeeMeeter)", s.name))),
+        _ => None,
+    }
+}
+
 /// Nœud d'envoi d'une entrée vers une sortie (niveau ≠ 0 dB).
 fn send_name(from: &str, to: &str) -> String {
     format!("{PREFIX}send.{from}.{to}")
@@ -184,8 +212,9 @@ struct Engine {
     meters: HashMap<String, Meter>,
     fx: HashMap<String, FxState>,
     sends: HashMap<(String, String), SendNode>,
-    /// Côtés « sortie » des câbles : (proxy, canaux, nom).
-    cable_outs: HashMap<String, (pw::node::Node, Vec<String>, String)>,
+    /// Compagnons visibles (côté « sortie » des câbles, strips matériels par
+    /// défaut) : (proxy, canaux, nom du nœud, description).
+    cable_outs: HashMap<String, (pw::node::Node, Vec<String>, String, String)>,
     /// Plugin LADSPA RNNoise trouvé au démarrage.
     rnnoise: Option<PathBuf>,
     links: HashMap<(u32, u32), OwnedLink>,
@@ -734,9 +763,9 @@ impl Engine {
 
     fn set_default(&mut self, s: &Strip) {
         let Some((_, meta, _)) = &self.metadata else { return };
-        let key =
-            if s.kind == Kind::VirtualIn { "default.configured.audio.sink" } else { "default.configured.audio.source" };
-        let value = serde_json::json!({ "name": node_name(&s.id) }).to_string();
+        let Some(sink) = s.kind.default_role() else { return };
+        let key = if sink { "default.configured.audio.sink" } else { "default.configured.audio.source" };
+        let value = serde_json::json!({ "name": public_name(s) }).to_string();
         meta.set_property(0, key, Some("Spa:String:JSON"), Some(&value));
         log::info!("default {} → {}", key.rsplit('.').next().unwrap_or(key), s.name);
     }
@@ -750,6 +779,8 @@ impl Engine {
         let target_name = match self.cfg.get(to) {
             // On joue dans un câble par son entrée, on l'enregistre par sa sortie.
             Some(s) if s.kind == Kind::Cable && recording => cable_out_name(to),
+            // Strip matériel : son périphérique visible s'il existe (défaut du système).
+            Some(s) if s.kind.is_hardware() && self.graph.node_by_name(&public_name(s)).is_some() => public_name(s),
             Some(_) => node_name(to),
             None => to.to_string(),
         };
@@ -842,16 +873,21 @@ impl Engine {
             }
         }
 
-        // 1 a. Côté « sortie » des câbles.
-        let want_outs: HashMap<String, (Vec<String>, String)> = strips
+        // 1 a. Compagnons visibles : côté « sortie » des câbles, micro ou sortie
+        // matériels choisis comme défaut du système.
+        let want_outs: HashMap<String, (Vec<String>, String, &'static str, String)> = strips
             .iter()
-            .filter(|s| s.kind == Kind::Cable)
-            .map(|s| (s.id.clone(), (s.channels.clone(), s.name.clone())))
+            .filter_map(|s| {
+                let (node, class, description) = companion(s)?;
+                Some((s.id.clone(), (s.channels.clone(), node, class, description)))
+            })
             .collect();
         let stale: Vec<String> = self
             .cable_outs
             .iter()
-            .filter(|(id, (_, ch, name))| want_outs.get(*id) != Some(&(ch.clone(), name.clone())))
+            .filter(|(id, (_, ch, node, desc))| {
+                want_outs.get(*id).is_none_or(|w| (&w.0, &w.1, &w.3) != (ch, node, desc))
+            })
             .map(|(id, _)| id.clone())
             .collect();
         for id in stale {
@@ -859,31 +895,34 @@ impl Engine {
                 let _ = self.core.destroy_object(proxy);
             }
         }
-        for (id, (channels, name)) in &want_outs {
+        for (id, (channels, node, class, description)) in &want_outs {
             if self.cable_outs.contains_key(id) {
                 continue;
             }
+            let source = class.starts_with("Audio/Source");
             let created = self.core.create_object::<pw::node::Node>(
                 "adapter",
                 &properties! {
                     "factory.name" => "support.null-audio-sink",
-                    "node.name" => cable_out_name(id),
-                    "node.description" => format!("{name} (output)"),
-                    "node.nick" => format!("{name} (output)"),
-                    "media.class" => "Audio/Source/Virtual",
+                    "node.name" => node.as_str(),
+                    "node.description" => description.as_str(),
+                    "node.nick" => description.as_str(),
+                    "media.class" => *class,
                     "audio.channels" => channels.len().to_string(),
                     "audio.position" => channels.join(","),
+                    // Côté sortie : les touches volume du bureau agissent sur ce qu'on entend.
+                    "monitor.channel-volumes" => "true",
                     "node.virtual" => "true",
                     "object.linger" => "false",
-                    "device.icon-name" => "audio-input-microphone",
+                    "device.icon-name" => if source { "audio-input-microphone" } else { "audio-speakers" },
                     "veemeeter.strip" => id.as_str(),
                 },
             );
             match created {
                 Ok(proxy) => {
-                    self.cable_outs.insert(id.clone(), (proxy, channels.clone(), name.clone()));
+                    self.cable_outs.insert(id.clone(), (proxy, channels.clone(), node.clone(), description.clone()));
                 }
-                Err(e) => log::warn!("cannot create the output of cable {id}: {e}"),
+                Err(e) => log::warn!("cannot create the visible device of {id}: {e}"),
             }
         }
 
@@ -982,7 +1021,8 @@ impl Engine {
         // 2. Périphérique par défaut (une fois par démarrage / par demande).
         if self.synced && self.metadata.is_some() {
             for s in strips.iter().filter(|s| s.primary) {
-                if self.graph.node_by_name(&node_name(&s.id)).is_some() && self.primary_done.insert(s.id.clone()) {
+                // Le défaut vise le périphérique visible (compagnon d'un strip matériel).
+                if self.graph.node_by_name(&public_name(s)).is_some() && self.primary_done.insert(s.id.clone()) {
                     self.set_default(s);
                 }
             }
@@ -1089,11 +1129,20 @@ impl Engine {
         for s in &self.cfg.strips {
             let Some(node) = g.node_by_name(&node_name(&s.id)) else { continue };
             let (sink, source) = ends(s, node.id);
-            // Câble : entrée → (effets) → côté « sortie » enregistré par les logiciels.
-            if s.kind == Kind::Cable {
-                if let Some(out) = g.node_by_name(&cable_out_name(&s.id)) {
-                    add(routing::match_ports(&our_outs(source), &ports(out.id, false)), false);
+            // Compagnons : câble ou micro par défaut → (effets) → source visible ;
+            // sortie par défaut visible → bus matériel.
+            match s.kind {
+                Kind::Cable | Kind::HardwareIn => {
+                    if let Some(out) = g.node_by_name(&cable_out_name(&s.id)) {
+                        add(routing::match_ports(&our_outs(source), &ports(out.id, false)), false);
+                    }
                 }
+                Kind::HardwareOut => {
+                    if let Some(input) = g.node_by_name(&hw_in_name(&s.id)) {
+                        add(routing::match_ports(&our_outs(input.id), &ports(sink, false)), false);
+                    }
+                }
+                _ => {}
             }
             if let Some((fi, fo)) = fx_nodes(&s.id) {
                 if s.kind == Kind::VirtualOut {
@@ -1150,9 +1199,9 @@ impl Engine {
             .strips
             .iter()
             .map(|s| {
-                let name = node_name(&s.id);
+                let name = public_name(s);
                 StripState {
-                    ready: g.node_by_name(&name).is_some(),
+                    ready: g.node_by_name(&node_name(&s.id)).is_some(),
                     online: !s.kind.is_hardware() || s.device.as_deref().is_some_and(|d| g.node_by_name(d).is_some()),
                     is_default: default_sink.as_deref() == Some(&name) || default_source.as_deref() == Some(&name),
                     strip: s.clone(),
@@ -1173,7 +1222,7 @@ impl Engine {
         devices.sort_by(|a, b| a.description.cmp(&b.description));
         let strip_of = |name: &str| {
             let id = name.strip_prefix(PREFIX)?;
-            let id = id.strip_suffix(".out").unwrap_or(id);
+            let id = id.strip_suffix(".out").or_else(|| id.strip_suffix(".in")).unwrap_or(id);
             self.cfg.get(id).is_some().then(|| id.to_string())
         };
         let mut apps: Vec<App> = g
