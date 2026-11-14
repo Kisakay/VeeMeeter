@@ -514,6 +514,16 @@ impl Engine {
             Command::MoveApp { app, to } => return self.move_app(*app, to),
             _ => {}
         }
+        if let Command::Primary { id } = &cmd {
+            // Recliquer « default » réimpose le défaut système même si la config le
+            // marquait déjà : il a pu être changé ailleurs (réglages son, pavucontrol).
+            if self.cfg.apply(&cmd)? {
+                self.save_timer.update_timer(Some(SAVE_DELAY), None);
+            }
+            self.primary_done.remove(id);
+            self.dirty = true;
+            return Ok(());
+        }
         if !self.cfg.apply(&cmd)? {
             return Ok(());
         }

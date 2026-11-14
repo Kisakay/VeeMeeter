@@ -12,6 +12,17 @@ All notable changes to VeeMeeter. Versions follow [SemVer](https://semver.org/).
   output through a "<name> (VeeMeeter)" device that feeds it. Still one
   default output and one default microphone at a time; cables excluded.
 
+### Fixed
+
+- **Clicking "default" again re-applies it.** If the system default was
+  changed elsewhere (sound settings, pavucontrol), clicking the button of a
+  strip already marked default did nothing; it now sets the system default
+  back.
+- **The default badge says which default it is**: *DEFAULT OUT* (where apps
+  play) or *DEFAULT MIC* (what apps record) — `ctl status` shows
+  `default output` / `default mic`. Two badges at once (an output and a mic)
+  were read as a bug.
+
 ## [0.2.1] - 2026-11-13
 
 ### Added

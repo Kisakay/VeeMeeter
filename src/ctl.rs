@@ -351,7 +351,7 @@ fn print_status(s: &Snapshot) {
                 flags.push("muted");
             }
             if st.is_default {
-                flags.push("default");
+                flags.push(if x.kind.default_role() == Some(false) { "default mic" } else { "default output" });
             }
             if !st.ready {
                 flags.push("not ready");

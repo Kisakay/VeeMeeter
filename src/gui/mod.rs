@@ -564,13 +564,19 @@ impl App {
                         if let Some(sink_role) = x.kind.default_role() {
                             let star = ui.add(
                                 egui::Button::new(
-                                    RichText::new(if s.is_default { "DEFAULT" } else { "default" })
+                                    // Dit QUEL défaut : sortie (les applis jouent ici) ou micro.
+                                    RichText::new(match (s.is_default, sink_role) {
+                                        (true, true) => "DEFAULT OUT",
+                                        (true, false) => "DEFAULT MIC",
+                                        (false, true) => "default out",
+                                        (false, false) => "default mic",
+                                    })
                                         .small()
                                         .strong()
                                         .color(if s.is_default { T.on_accent } else { T.star }),
                                 )
                                 .fill(if s.is_default { T.star } else { T.card_hi })
-                                .min_size(vec2(58.0, 26.0)),
+                                .min_size(vec2(76.0, 26.0)),
                             );
                             let star = star.on_hover_text(match (sink_role, x.kind.is_hardware()) {
                                 (true, false) => "Make this the system default output (apps play here)",
