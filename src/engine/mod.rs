@@ -440,15 +440,15 @@ impl Engine {
                 // Personne d'autre ne règle un envoi : toute autre valeur (restauration
                 // d'état du gestionnaire de session) est corrigée.
                 let want = self.cfg.get(&from).and_then(|s| s.sends.get(&to)).map(|db| db_to_linear(*db));
-                if let (Some(want), Some(n)) = (want, self.sends.get(&(from, to))) {
-                    if volumes.iter().any(|v| (v - want).abs() > 1e-3) {
-                        let bytes = pod::props(&vec![want; n.channels.len()], false);
-                        n.proxy.set_param(
-                            spa::param::ParamType::Props,
-                            0,
-                            spa::pod::Pod::from_bytes(&bytes).expect("valid pod"),
-                        );
-                    }
+                if let (Some(want), Some(n)) = (want, self.sends.get(&(from, to)))
+                    && volumes.iter().any(|v| (v - want).abs() > 1e-3)
+                {
+                    let bytes = pod::props(&vec![want; n.channels.len()], false);
+                    n.proxy.set_param(
+                        spa::param::ParamType::Props,
+                        0,
+                        spa::pod::Pod::from_bytes(&bytes).expect("valid pod"),
+                    );
                 }
             }
             Ev::NodeInfo { id, props } => {
@@ -621,10 +621,10 @@ impl Engine {
         let listener = node
             .add_listener_local()
             .param(move |_seq, id, _index, _next, param| {
-                if id == spa::param::ParamType::Props {
-                    if let Some((volumes, _)) = param.and_then(pod::parse_props) {
-                        w.push(Ev::SendProps { from: f.clone(), to: t.clone(), volumes });
-                    }
+                if id == spa::param::ParamType::Props
+                    && let Some((volumes, _)) = param.and_then(pod::parse_props)
+                {
+                    w.push(Ev::SendProps { from: f.clone(), to: t.clone(), volumes });
                 }
             })
             .register();
@@ -957,16 +957,12 @@ impl Engine {
                     Err(e) => log::warn!("effects on {}: {e}", s.id),
                 }
             }
-            if let Some(f) = self.fx.get_mut(&s.id) {
-                if let (Some(proxy), true) = (&f.proxy, f.sig.eq && f.applied != Some(s.fx.gains)) {
-                    let bytes = fx::gains_pod(&s.fx);
-                    proxy.set_param(
-                        spa::param::ParamType::Props,
-                        0,
-                        spa::pod::Pod::from_bytes(&bytes).expect("valid pod"),
-                    );
-                    f.applied = Some(s.fx.gains);
-                }
+            if let Some(f) = self.fx.get_mut(&s.id)
+                && let (Some(proxy), true) = (&f.proxy, f.sig.eq && f.applied != Some(s.fx.gains))
+            {
+                let bytes = fx::gains_pod(&s.fx);
+                proxy.set_param(spa::param::ParamType::Props, 0, spa::pod::Pod::from_bytes(&bytes).expect("valid pod"));
+                f.applied = Some(s.fx.gains);
             }
         }
 
@@ -1014,17 +1010,17 @@ impl Engine {
                 }
             }
             let present = self.graph.node_by_name(&send_name(from, to)).is_some();
-            if let Some(n) = self.sends.get_mut(&key) {
-                if n.applied != *db || (present && !n.seen) {
-                    let bytes = pod::props(&vec![db_to_linear(*db); channels.len()], false);
-                    n.proxy.set_param(
-                        spa::param::ParamType::Props,
-                        0,
-                        spa::pod::Pod::from_bytes(&bytes).expect("valid pod"),
-                    );
-                    n.applied = *db;
-                    n.seen |= present;
-                }
+            if let Some(n) = self.sends.get_mut(&key)
+                && (n.applied != *db || (present && !n.seen))
+            {
+                let bytes = pod::props(&vec![db_to_linear(*db); channels.len()], false);
+                n.proxy.set_param(
+                    spa::param::ParamType::Props,
+                    0,
+                    spa::pod::Pod::from_bytes(&bytes).expect("valid pod"),
+                );
+                n.applied = *db;
+                n.seen |= present;
             }
         }
 
@@ -1299,10 +1295,10 @@ impl Engine {
     fn broadcast(&mut self, line: &ipc::Line, filter: impl Fn(&ClientState) -> bool) {
         let mut gone = vec![];
         for (id, c) in &self.clients {
-            if filter(c) {
-                if let Err(SendError::Gone) = c.tx.send(line.clone()) {
-                    gone.push(*id);
-                }
+            if filter(c)
+                && let Err(SendError::Gone) = c.tx.send(line.clone())
+            {
+                gone.push(*id);
             }
         }
         for id in gone {

@@ -16,7 +16,7 @@ hide:
 
 <p class="vm-tagline">A cute, native virtual audio mixer and router for Linux. Voicemeeter-style strips and A/B buses, built directly on PipeWire.</p>
 
-<p class="vm-pills"><span>Rust</span> <span>PipeWire native</span> <span>NixOS ready</span> <span>egui</span></p>
+<p class="vm-pills"><span>Rust</span> <span>PipeWire native</span> <span>NixOS ready</span> <span>libcosmic</span></p>
 
 [Install it :material-download:](installation.md){ .md-button .md-button--primary }
 [How it works :material-book-open-variant:](concepts.md){ .md-button }

@@ -39,12 +39,11 @@ pub fn pick_device(candidates: &[(&str, &str)], default: Option<&str>, capture: 
         let t = format!("{name} {desc}").to_lowercase();
         t.contains("monitor") || t.contains("loopback")
     };
-    if let Some(d) = default {
-        if let Some(&(n, desc)) = candidates.iter().find(|(n, _)| *n == d) {
-            if !looped(n, desc) {
-                return Some(n.to_string());
-            }
-        }
+    if let Some(d) = default
+        && let Some(&(n, desc)) = candidates.iter().find(|(n, _)| *n == d)
+        && !looped(n, desc)
+    {
+        return Some(n.to_string());
     }
     let score = |&(n, desc): &(&str, &str)| -> i32 {
         let t = format!("{n} {desc}").to_lowercase();

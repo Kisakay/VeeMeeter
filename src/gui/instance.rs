@@ -15,8 +15,18 @@ pub enum Order {
 }
 
 fn addr(role: &str) -> Option<SocketAddr> {
+    SocketAddr::from_abstract_name(name(role)).ok()
+}
+
+/// Nom du socket : propre à l'utilisateur ET à sa session (dossier runtime),
+/// comme le socket du daemon. Un environnement isolé (tests, captures) ne
+/// réveille donc jamais la fenêtre de la vraie session.
+fn name(role: &str) -> String {
+    use std::hash::{Hash, Hasher};
     let uid = std::fs::metadata("/proc/self").map(|m| m.uid()).unwrap_or(0);
-    SocketAddr::from_abstract_name(format!("veemeeter-{role}-{uid}")).ok()
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    crate::ipc::socket_path().hash(&mut h);
+    format!("veemeeter-{role}-{uid}-{:016x}", h.finish())
 }
 
 /// Réserve le rôle (`gui` ou `tray`). `None` : un autre processus le tient déjà.
@@ -57,4 +67,13 @@ pub fn listen(listener: UnixListener, on_order: impl Fn(Order) + Send + 'static)
             }
         })
         .expect("spawn instance thread");
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn names_follow_the_session() {
+        assert_ne!(super::name("gui"), super::name("tray"));
+        assert!(super::name("gui").starts_with("veemeeter-gui-"));
+    }
 }

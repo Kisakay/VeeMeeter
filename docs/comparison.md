@@ -13,7 +13,7 @@ outputs, A/B buses), different engine.
 | **Closing the window** | Routing keeps running. |
 | **Stopping it** | Every VeeMeeter node and link vanishes cleanly. |
 | **Hotplug** | Declarative reconcile: unplugged devices and their links come back on their own. |
-| **UI** | Native egui window: no browser, no Electron. |
+| **UI** | Native libcosmic window (the COSMIC desktop toolkit): no browser, no Electron. |
 | **Scripting** | `veemeeter ctl` over a Unix socket (JSON lines). |
 | **NixOS** | First-class flake: package, overlay, NixOS module, home-manager module. |
 | **Language** | Rust, one binary. |
@@ -42,8 +42,8 @@ nodes and links are recreated, nothing to click.
 
 ## Light and native
 
-One Rust binary and an immediate-mode egui window: no web runtime to
-ship, start or keep in memory.
+One Rust binary and a libcosmic window drawn on the GPU (software fallback
+without one): no web runtime to ship, start or keep in memory.
 
 !!! mimi-think "Coming from PulseMeeter?"
     Recreate your strips with **+ Add** (or `veemeeter ctl add`), then toggle

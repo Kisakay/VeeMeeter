@@ -47,7 +47,7 @@ impl Meter {
                 let Some(bytes) = data.data() else { return };
                 let Some(bytes) = bytes.get(offset..offset + size) else { return };
                 let mut peaks = [0f32; 32];
-                for (i, s) in bytes.chunks_exact(4).enumerate() {
+                for (i, s) in bytes.as_chunks::<4>().0.iter().enumerate() {
                     let v = f32::from_le_bytes([s[0], s[1], s[2], s[3]]).abs();
                     let c = i % n;
                     if c < 32 && v > peaks[c] {

@@ -18,11 +18,13 @@ shoot() { # shoot <fichier> <démon:0|1> [clic x y]
   local file=$1 daemon=$2 click=${3:-}
   rm -f "$RT/veemeeter.sock"
   if [ "$daemon" = 1 ]; then XDG_RUNTIME_DIR=$RT python3 scripts/demo-daemon.py & sleep 0.5; fi
-  "$XVFB/xvfb-run" -a -s "-screen 0 1600x740x24" bash -c "
+  "$XVFB/xvfb-run" -a -s "-screen 0 1600x760x24" bash -c "
     unset WAYLAND_DISPLAY
-    export XDG_RUNTIME_DIR=$RT LD_LIBRARY_PATH=$LIBS:/run/opengl-driver/lib
-    ./target/debug/veemeeter gui --no-spawn >/dev/null 2>&1 &
+    export XDG_RUNTIME_DIR=$RT XDG_CONFIG_HOME=$RT/config LD_LIBRARY_PATH=$LIBS:/run/opengl-driver/lib
+    ./target/debug/veemeeter gui --no-spawn --no-tray >/dev/null 2>&1 &
     sleep 6
+    # Un premier événement d'entrée déclenche le premier rendu (Xvfb n'en envoie aucun).
+    $XDO/xdotool mousemove 700 600; sleep 0.5; $XDO/xdotool mousemove 1590 735; sleep 1
     if [ -n '$click' ]; then $XDO/xdotool mousemove $click click 1; sleep 1.5; fi
     $IM/import -window root '$OUT/$file'
     kill %1"
@@ -32,6 +34,6 @@ shoot() { # shoot <fichier> <démon:0|1> [clic x y]
 }
 
 shoot mixer.png 1
-shoot strip-menu.png 1 "481 107"
-shoot fx-menu.png 1 "114 118"
+shoot strip-menu.png 1 "548 105"
+shoot fx-menu.png 1 "134 105"
 shoot waking.png 0

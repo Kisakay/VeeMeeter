@@ -14,7 +14,7 @@ flat darker shapes. **No gradients, no blur, no raster AI art.**
 | `logo/` | App icon / mark (colour, dark, small, mono), wordmarks, lockups, `png/` exports |
 | `decor/` | Sparkles, star, heart, note, sound wave, meter bars, mute badge, pattern tiles, dividers |
 | `social/` | 1280×640 social preview (`banner.svg` + `banner.png`), mixer mockup |
-| `palette.toml` | The palette, including the egui `[ui.dark]` / `[ui.light]` themes |
+| `palette.toml` | The palette, including the `[ui.dark]` / `[ui.light]` app colours |
 | `palette.css` | Same palette as CSS custom properties (generated) |
 | `favicon.svg` | 32-grid favicon |
 | `swatches/` | Colour chips used by this README (generated) |
@@ -162,7 +162,10 @@ Rules: pastel solids (sakura, lavender, mint, sky, lemon) are **fills**; text
 on them is always **ink**. On light backgrounds, coloured text uses the
 `_deep` variants. Never put white text on a pastel.
 
-### App theme (egui)
+### App colours
+
+The window follows the COSMIC system theme; it uses these keys only where
+the brand carries meaning (VU meters, strip badges, routes, mute, default).
 
 `[ui.dark]` (default) and `[ui.light]` in `palette.toml` are meant to be read
 by the GUI as-is: `bg`, `panel`, `card`, `card_hover`, `border`, `selection`,

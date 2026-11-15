@@ -70,8 +70,9 @@ repairs the graph by itself when a device comes and goes.
   fights your sound settings.
 - ❄️ **NixOS ready** — flake with package, overlay, NixOS module and
   home-manager module, plus a hardened systemd user service.
-- 🪶 **Light** — one 13 MB binary (engine, window and CLI), egui on OpenGL,
-  no web runtime.
+- 🪶 **Native** — one 29 MB binary (engine, window and CLI), the window
+  built with libcosmic (the COSMIC toolkit): system theme, GPU rendering, no
+  web runtime.
 
 ## Use cases
 
@@ -134,8 +135,10 @@ nix run github:Kisakay/VeeMeeter
 
 ### From source (any distro)
 
-You need Rust ≥ 1.85, the `libpipewire-0.3` headers, `clang` (for bindgen)
-and `pkg-config`. With Nix, `nix develop` provides all of it.
+You need Rust ≥ 1.93, `clang` (for bindgen), `pkg-config`, and the headers
+of `libpipewire-0.3`, `xkbcommon`, `wayland`, `fontconfig`, `freetype` and
+`expat` (the window uses libcosmic). With Nix, `nix develop` provides all of
+it; `packaging/build.sh` lists the package names per distribution.
 
 ```sh
 git clone https://github.com/Kisakay/VeeMeeter && cd VeeMeeter
@@ -233,7 +236,7 @@ PulseMeeter is the project that inspired VeeMeeter. The main differences:
 
 | | PulseMeeter | VeeMeeter |
 |---|---|---|
-| Language / UI | Python + GTK | Rust + egui (OpenGL) |
+| Language / UI | Python + GTK | Rust + libcosmic (COSMIC toolkit) |
 | How it drives PipeWire | runs `pw-cli`, `pw-link`, `pactl`… as subprocesses | libpipewire in process, no subprocess |
 | Fader | the device's volume | its own gain, independent of system volume |
 | Graph ownership | objects left in PipeWire, cleaned up by the app | owned by the daemon: they vanish with it |

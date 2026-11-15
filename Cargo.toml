@@ -2,7 +2,7 @@
 name = "veemeeter"
 version = "0.3.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.93"
 description = "Native PipeWire audio mixer and router (Voicemeeter-like) for Linux"
 license = "GPL-3.0-only"
 repository = "https://github.com/Kisakay/VeeMeeter"
@@ -12,7 +12,6 @@ categories = ["multimedia::audio"]
 
 [dependencies]
 pipewire = "0.10"
-eframe = { version = "0.37", default-features = false, features = ["glow", "wayland", "x11", "default_fonts"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1"
@@ -23,6 +22,15 @@ anyhow = "1"
 png = "0.18"
 # Icône de zone de notification (StatusNotifierItem, D-Bus pur Rust, sans GTK).
 ksni = { version = "0.3", default-features = false, features = ["blocking", "async-io"] }
+
+# Fenêtre : toolkit de COSMIC (iced), thème du système. Rendu GPU (wgpu), comme
+# les applications COSMIC ; repli automatique sur tiny-skia sans GPU. Pas publié sur crates.io : le commit est figé par Cargo.lock
+# (CI en --locked). Pas de `rev =` : ses sous-crates référencent ce dépôt sans
+# rev, deux sources pour le même commit casseraient le vendoring de Nix.
+[dependencies.libcosmic]
+git = "https://github.com/pop-os/libcosmic"
+default-features = false
+features = ["winit", "wayland", "x11", "tokio", "multi-window", "dbus-config", "wgpu"]
 
 [profile.release]
 lto = "thin"
@@ -42,7 +50,8 @@ outputs, Voicemeeter style: virtual inputs and outputs, A/B buses, faders \
 in dB, VU meters, per-application routing. It drives PipeWire natively and \
 keeps the routing alive in a small user daemon."""
 # $auto = libpipewire + libc ; le reste est chargé à l'exécution (dlopen) par la fenêtre.
-depends = "$auto, pipewire, wireplumber, libgl1, libegl1, libxkbcommon0, libwayland-client0, libwayland-egl1"
+# Fenêtre libcosmic : GPU par Vulkan (repli logiciel sans), xkbcommon et Wayland chargés à l'exécution.
+depends = "$auto, pipewire, wireplumber, libxkbcommon0, libwayland-client0, fontconfig, libvulkan1"
 assets = [
     ["target/release/veemeeter", "usr/bin/", "755"],
     ["assets/veemeeter.desktop", "usr/share/applications/", "644"],
@@ -66,7 +75,7 @@ auto-req = "auto"
 [package.metadata.generate-rpm.requires]
 pipewire = "*"
 wireplumber = "*"
-libglvnd-egl = "*"
 libxkbcommon = "*"
 libwayland-client = "*"
-libwayland-egl = "*"
+fontconfig = "*"
+vulkan-loader = "*"

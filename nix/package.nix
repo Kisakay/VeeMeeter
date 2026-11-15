@@ -4,6 +4,11 @@
 , llvmPackages
 , makeWrapper
 , pipewire
+, libxkbcommon
+, wayland
+, fontconfig
+, freetype
+, expat
 , rnnoise-plugin
 , pkgs
   # Suppression de bruit prête à l'emploi (plugin LADSPA RNNoise).
@@ -24,10 +29,15 @@ rustPlatform.buildRustPackage {
       !(lib.elem base [ "target" "result" ".git" ]);
   };
 
-  cargoLock.lockFile = ../Cargo.lock;
+  cargoLock = {
+    lockFile = ../Cargo.lock;
+    # libcosmic et ses dépendances viennent de git (épinglées dans Cargo.lock).
+    allowBuiltinFetchGit = true;
+  };
 
   nativeBuildInputs = [ pkg-config rustPlatform.bindgenHook makeWrapper ];
-  buildInputs = [ pipewire ];
+  # libcosmic (fenêtre) : clavier et protocole Wayland, polices.
+  buildInputs = [ pipewire libxkbcommon wayland fontconfig freetype expat ];
 
   postInstall = ''
     install -Dm644 assets/veemeeter.desktop $out/share/applications/veemeeter.desktop

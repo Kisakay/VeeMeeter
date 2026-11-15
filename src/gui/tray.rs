@@ -4,9 +4,9 @@
 //! tray ouvre et ferme donc la fenêtre comme un processus séparé.
 
 use super::instance::{self, Order};
+use super::link::{Shared, meter_pos, meter_pos_db, start_connection};
 use super::mascot::{Mood, decode_rgba};
 use super::settings::Settings;
-use super::{Shared, meter_pos, meter_pos_db, start_connection};
 use ksni::blocking::TrayMethods;
 use std::process::Child;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -216,7 +216,7 @@ impl Sprites {
         let full = decoded[0].1;
         let (mut x0, mut y0, mut x1, mut y1) = (full, full, 0, 0);
         for (_, w, rgba) in &decoded {
-            for (i, p) in rgba.chunks_exact(4).enumerate() {
+            for (i, p) in rgba.as_chunks::<4>().0.iter().enumerate() {
                 if p[3] > 8 {
                     let (x, y) = (i % w, i / w);
                     (x0, y0, x1, y1) = (x0.min(x), y0.min(y), x1.max(x + 1), y1.max(y + 1));
@@ -462,7 +462,7 @@ mod tests {
         assert_eq!(still.data.len(), ICON * ICON * 4);
         // Coins du haut transparents, Mimi bien présente.
         assert_eq!(still.data[0], 0);
-        assert!(still.data.chunks_exact(4).filter(|p| p[0] > 200).count() > ICON * ICON / 4);
+        assert!(still.data.as_chunks::<4>().0.iter().filter(|p| p[0] > 200).count() > ICON * ICON / 4);
         let jump = s.frame(Pose::new(Mood::Happy, 1.0, 0.0, 0.8));
         assert_ne!(still.data, jump.data);
         // Silence : petites variations invisibles → même pose, rien à redessiner.

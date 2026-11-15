@@ -1,21 +1,12 @@
-//! Mimi, la mascotte, dans la fenêtre. PNG pré-rendus depuis `branding/mascot`
-//! (`branding/src/build.sh`), décodés une fois au démarrage.
+//! Mimi, la mascotte. PNG pré-rendus depuis `branding/mascot`
+//! (`branding/src/build.sh`), décodés en RGBA pour la fenêtre et le tray.
 
-use eframe::egui::{self, ColorImage, TextureHandle, TextureOptions};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Mood {
     Wave,
     Happy,
     Sleepy,
     Surprised,
-}
-
-pub struct Mimi {
-    wave: TextureHandle,
-    happy: TextureHandle,
-    sleepy: TextureHandle,
-    surprised: TextureHandle,
 }
 
 impl Mood {
@@ -30,34 +21,6 @@ impl Mood {
             Mood::Surprised => include_bytes!("../../assets/gui/mimi-surprised.png"),
         }
     }
-}
-
-impl Mimi {
-    pub fn load(ctx: &egui::Context) -> Mimi {
-        let t = |name: &str, mood: Mood| ctx.load_texture(name, decode(mood.png()), TextureOptions::LINEAR);
-        Mimi {
-            wave: t("mimi-wave", Mood::Wave),
-            happy: t("mimi-happy", Mood::Happy),
-            sleepy: t("mimi-sleepy", Mood::Sleepy),
-            surprised: t("mimi-surprised", Mood::Surprised),
-        }
-    }
-
-    pub fn image(&self, mood: Mood, size: f32) -> egui::Image<'static> {
-        let tex = match mood {
-            Mood::Wave => &self.wave,
-            Mood::Happy => &self.happy,
-            Mood::Sleepy => &self.sleepy,
-            Mood::Surprised => &self.surprised,
-        };
-        egui::Image::new((tex.id(), egui::vec2(size, size)))
-    }
-}
-
-/// PNG embarqué → image RGBA (les fichiers sont générés par resvg : RGBA 8 bits).
-fn decode(bytes: &[u8]) -> ColorImage {
-    let (size, rgba) = decode_rgba(bytes);
-    ColorImage::from_rgba_unmultiplied(size, &rgba)
 }
 
 /// PNG embarqué → `([largeur, hauteur], pixels RGBA non prémultipliés)`.
@@ -76,8 +39,9 @@ mod tests {
     #[test]
     fn embedded_mascots_decode() {
         for mood in super::Mood::ALL {
-            let img = super::decode(mood.png());
-            assert_eq!(img.size, [192, 192]);
+            let ([w, h], rgba) = super::decode_rgba(mood.png());
+            assert_eq!((w, h), (192, 192));
+            assert_eq!(rgba.len(), 192 * 192 * 4);
         }
     }
 }

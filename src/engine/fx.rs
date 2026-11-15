@@ -67,17 +67,17 @@ pub fn find_rnnoise() -> Option<PathBuf> {
 pub fn module_args(s: &Strip, sig: &FxSig, rnnoise: Option<&Path>) -> String {
     let q = |v: &str| serde_json::to_string(v).expect("string serializes");
     let mut nodes = vec![];
-    if sig.denoise {
-        if let Some(p) = rnnoise {
-            nodes.push((
-                "rnn".to_string(),
-                format!(
-                    "{{ type = ladspa name = rnn plugin = {} label = noise_suppressor_mono }}",
-                    q(&p.to_string_lossy())
-                ),
-                ("Input", "Output"),
-            ));
-        }
+    if sig.denoise
+        && let Some(p) = rnnoise
+    {
+        nodes.push((
+            "rnn".to_string(),
+            format!(
+                "{{ type = ladspa name = rnn plugin = {} label = noise_suppressor_mono }}",
+                q(&p.to_string_lossy())
+            ),
+            ("Input", "Output"),
+        ));
     }
     if sig.eq {
         for (i, (label, freq, qf, _)) in EQ_BANDS.iter().enumerate() {

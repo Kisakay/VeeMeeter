@@ -14,13 +14,15 @@ case $family in
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
     apt-get install -y -qq --no-install-recommends \
-      ca-certificates curl build-essential pkg-config clang libclang-dev libpipewire-0.3-dev >/dev/null
+      ca-certificates curl git build-essential pkg-config clang libclang-dev libpipewire-0.3-dev \
+      libxkbcommon-dev libwayland-dev libfontconfig-dev libfreetype-dev libexpat1-dev >/dev/null
     ;;
   fedora)
-    dnf install -y -q gcc clang clang-devel pkgconf-pkg-config pipewire-devel curl >/dev/null
+    dnf install -y -q gcc clang clang-devel pkgconf-pkg-config pipewire-devel curl git \
+      libxkbcommon-devel wayland-devel fontconfig-devel freetype-devel expat-devel >/dev/null
     ;;
   arch)
-    pacman -Syu --noconfirm --needed base-devel clang pipewire curl >/dev/null
+    pacman -Syu --noconfirm --needed base-devel clang pipewire curl git libxkbcommon wayland fontconfig freetype2 expat vulkan-icd-loader >/dev/null
     ;;
   *) echo "unknown family $family" >&2; exit 2 ;;
 esac

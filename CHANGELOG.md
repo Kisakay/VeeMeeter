@@ -2,6 +2,31 @@
 
 All notable changes to VeeMeeter. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **The window is now built with libcosmic**, the toolkit of the COSMIC
+  desktop (on iced), instead of egui: native COSMIC header bar and window
+  controls, and it follows the system theme (dark / light, accent, corner
+  radii). Brand colours stay where they mean something: VU meters, strip
+  badges, A/B routes, mute and default. Everything the old window did is
+  there: strips and faders, VU meters, FX (equalizer, noise suppression),
+  strip menu, right-click send levels, applications panel, Mimi.
+- GPU rendering (wgpu, through Vulkan) like COSMIC apps, with an automatic
+  software fallback (tiny-skia) when no GPU is available. The packages now
+  depend on the Vulkan loader instead of libGL / libEGL. Rounded transparent
+  corners on Wayland, opaque window on X11 (a transparent window shows black
+  without a compositor). The binary grows from 13 MB to 29 MB.
+- The window redraws at 30 fps only while a VU meter moves, 10 fps when
+  idle, 4 fps while waiting for the engine.
+
+### Fixed
+
+- Single-instance locks (window, tray) are now per session: a VeeMeeter
+  started with another runtime directory no longer raises the window of
+  your session.
+
 ## [0.3.0] - 2026-11-15
 
 ### Changed
