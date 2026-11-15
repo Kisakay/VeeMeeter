@@ -17,7 +17,11 @@ There are two programs in one binary:
 
 === "NixOS module"
 
-    Add the flake input and import the module:
+    Add the flake input and import the module. Nothing is compiled on your
+    machine: the module installs the binary built by CI for the latest
+    release (`veemeeter-bin`, only patched for NixOS). Set
+    `programs.veemeeter.package = inputs.veemeeter.packages.x86_64-linux.veemeeter;`
+    to build from source instead.
 
     ```nix title="flake.nix"
     {

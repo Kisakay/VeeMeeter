@@ -6,6 +6,13 @@ All notable changes to VeeMeeter. Versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- **Prebuilt binary for Nix**: each release now ships a generic
+  `veemeeter-<version>-linux-x86_64.tar.gz` (built on Debian 13), and CI
+  records its URL and hash in the flake (`nix/bin.json`). The flake's
+  `veemeeter-bin` package downloads it and only patches it for NixOS; it is
+  the default package and the default of the NixOS / home-manager modules,
+  so NixOS never compiles VeeMeeter. `veemeeter` still builds from source.
+
 - **Mouse wheel on sliders**: scroll over a fader (1 dB per notch), an
   equalizer band (0.5 dB) or a send level to change it; scrolling elsewhere
   still scrolls the mixer. Fast notches add up without waiting for the engine.

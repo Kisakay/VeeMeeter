@@ -40,29 +40,39 @@ mkdir -p dist
 # Sans tiret : interdit dans une release RPM, ambigu dans une révision Debian.
 # shellcheck disable=SC1091
 id=$( . /etc/os-release && echo "${ID}${VERSION_ID:-}" )
+version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+
+# Archive à extraire dans / (binaire, .desktop, icône, service, doc, licence).
+tarball() { # tarball <nom du fichier>
+  root=dist/root
+  rm -rf "$root"
+  install -Dm755 "$CARGO_TARGET_DIR/release/veemeeter" "$root/usr/bin/veemeeter"
+  install -Dm644 assets/veemeeter.desktop "$root/usr/share/applications/veemeeter.desktop"
+  install -Dm644 assets/veemeeter.svg "$root/usr/share/icons/hicolor/scalable/apps/veemeeter.svg"
+  install -Dm644 assets/veemeeter.service "$root/usr/lib/systemd/user/veemeeter.service"
+  install -Dm644 README.md "$root/usr/share/doc/veemeeter/README.md"
+  install -Dm644 LICENSE "$root/usr/share/licenses/veemeeter/LICENSE"
+  tar -C "$root" --owner=0 --group=0 -czf "dist/$1" usr
+  rm -rf "$root"
+}
+
 case $family in
   debian|ubuntu)
     cargo install --locked -q cargo-deb
     # cargo-deb trouve le binaire via CARGO_TARGET_DIR (exporté plus haut).
     cargo deb --no-build --no-strip -o "dist/" --deb-revision "1~$id"
+    # Archive Linux générique, construite sur Debian (glibc ancienne, donc
+    # compatible avec les distributions plus récentes) : c'est elle que le
+    # paquet Nix `veemeeter-bin` télécharge, sans rien compiler.
+    case $id in debian*) tarball "veemeeter-$version-linux-x86_64.tar.gz" ;; esac
     ;;
   fedora)
     cargo install --locked -q cargo-generate-rpm
     cargo generate-rpm --target-dir "$CARGO_TARGET_DIR" -o "dist/" -s "release = '1.$id'"
     ;;
   arch)
-    # Arborescence à extraire dans / : `sudo tar -xzf veemeeter-*.tar.gz -C /`.
-    root=dist/root
-    rm -rf "$root"
-    install -Dm755 "$CARGO_TARGET_DIR/release/veemeeter" "$root/usr/bin/veemeeter"
-    install -Dm644 assets/veemeeter.desktop "$root/usr/share/applications/veemeeter.desktop"
-    install -Dm644 assets/veemeeter.svg "$root/usr/share/icons/hicolor/scalable/apps/veemeeter.svg"
-    install -Dm644 assets/veemeeter.service "$root/usr/lib/systemd/user/veemeeter.service"
-    install -Dm644 README.md "$root/usr/share/doc/veemeeter/README.md"
-    install -Dm644 LICENSE "$root/usr/share/licenses/veemeeter/LICENSE"
-    version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
-    tar -C "$root" --owner=0 --group=0 -czf "dist/veemeeter-$version-arch-x86_64.tar.gz" usr
-    rm -rf "$root"
+    # `sudo tar -xzf veemeeter-*-arch-x86_64.tar.gz -C /`.
+    tarball "veemeeter-$version-arch-x86_64.tar.gz"
     ;;
 esac
 ls -la dist/

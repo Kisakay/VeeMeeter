@@ -11,8 +11,10 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = self.packages.${pkgs.stdenv.hostPlatform.system}.veemeeter;
-      defaultText = lib.literalExpression "inputs.veemeeter.packages.\${system}.veemeeter";
+      # Binaire précompilé de la dernière release s'il existe (rien à compiler),
+      # sinon compilé depuis les sources.
+      default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      defaultText = lib.literalExpression "inputs.veemeeter.packages.\${system}.default";
       description = "The VeeMeeter package to use.";
     };
   };

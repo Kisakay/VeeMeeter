@@ -106,6 +106,11 @@ repairs the graph by itself when a device comes and goes.
 }
 ```
 
+Nothing is compiled on your machine: the module installs the binary that CI
+built for the latest release (`veemeeter-bin`, only adapted to NixOS with
+patchelf). Use `programs.veemeeter.package = veemeeter.packages.x86_64-linux.veemeeter;`
+to build from source instead.
+
 ### home-manager
 
 ```nix
