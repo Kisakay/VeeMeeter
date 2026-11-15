@@ -70,6 +70,16 @@ pub enum Message {
     EqDone(String),
     RenameInput(String, String),
     RenameSubmit(String),
+    /// Molette sur un curseur survolé.
+    Wheel(Wheel, mouse::ScrollDelta),
+}
+
+/// Curseur réglé à la molette.
+#[derive(Clone, Debug)]
+pub enum Wheel {
+    Fader(String),
+    Eq(String, usize),
+    Send(String, String),
 }
 
 pub struct App {
@@ -88,6 +98,11 @@ pub struct App {
     send_drag: HashMap<(String, String), f32>,
     eq_drag: HashMap<String, [f32; 5]>,
     rename: HashMap<String, String>,
+    /// Valeurs posées à la molette, prioritaires jusqu'à l'écho du daemon :
+    /// des crans rapides s'additionnent au lieu de repartir de l'ancienne valeur.
+    wheel_vol: HashMap<String, (f32, Instant)>,
+    wheel_send: HashMap<(String, String), (f32, Instant)>,
+    wheel_eq: HashMap<String, ([f32; 5], Instant)>,
     show_apps: bool,
     settings: settings::Settings,
 }
@@ -111,6 +126,31 @@ impl App {
 
     fn mimi(&self, mood: Mood, size: f32) -> Element<'_, Message> {
         widget::image(self.mimi[&mood].clone()).width(Length::Fixed(size)).height(Length::Fixed(size)).into()
+    }
+
+    /// Volume affiché : glissé en cours, puis molette récente, puis daemon.
+    fn fader_db(&self, id: &str) -> f32 {
+        if let Some(db) = self.dragging.get(id) {
+            return *db;
+        }
+        if let Some((db, _)) = self.wheel_vol.get(id).filter(|(_, at)| fresh(*at)) {
+            return *db;
+        }
+        self.snap.as_ref().and_then(|s| s.strip(id)).map_or(0.0, |s| s.strip.volume_db)
+    }
+
+    fn send_db(&self, from: &str, to: &str) -> f32 {
+        if let Some((db, _)) = self.wheel_send.get(&(from.to_string(), to.to_string())).filter(|(_, at)| fresh(*at)) {
+            return *db;
+        }
+        self.snap.as_ref().and_then(|s| s.strip(from)).and_then(|s| s.strip.sends.get(to).copied()).unwrap_or(0.0)
+    }
+
+    fn eq_gains(&self, id: &str) -> [f32; 5] {
+        if let Some((g, _)) = self.wheel_eq.get(id).filter(|(_, at)| fresh(*at)) {
+            return *g;
+        }
+        self.snap.as_ref().and_then(|s| s.strip(id)).map_or([0.0; 5], |s| s.strip.fx.gains)
     }
 
     /// Ouvre un popup, ou le ferme s'il était déjà ouvert.
@@ -158,6 +198,9 @@ impl cosmic::Application for App {
             send_drag: HashMap::new(),
             eq_drag: HashMap::new(),
             rename: HashMap::new(),
+            wheel_vol: HashMap::new(),
+            wheel_send: HashMap::new(),
+            wheel_eq: HashMap::new(),
             show_apps: true,
             settings: settings::Settings::load(),
         };
@@ -281,6 +324,30 @@ impl cosmic::Application for App {
             }
             Message::RenameInput(id, v) => {
                 self.rename.insert(id, v);
+            }
+            Message::Wheel(target, delta) => {
+                let now = Instant::now();
+                match target {
+                    Wheel::Fader(id) => {
+                        let base = self.fader_db(&id);
+                        let db = ((base + wheel_db(delta, 1.0)).clamp(MIN_DB, MAX_DB) * 10.0).round() / 10.0;
+                        self.wheel_vol.insert(id.clone(), (db, now));
+                        self.send(Command::Volume { id, db });
+                    }
+                    Wheel::Eq(id, band) => {
+                        let mut gains = self.eq_gains(&id);
+                        let g = gains[band] + wheel_db(delta, 0.5);
+                        gains[band] = (g.clamp(-EQ_RANGE, EQ_RANGE) * 2.0).round() / 2.0;
+                        self.wheel_eq.insert(id.clone(), (gains, now));
+                        self.send(Command::Eq { id, enabled: None, gains: Some(gains) });
+                    }
+                    Wheel::Send(from, to) => {
+                        let base = self.send_db(&from, &to);
+                        let db = ((base + wheel_db(delta, 1.0)).clamp(MIN_DB, MAX_DB) * 10.0).round() / 10.0;
+                        self.wheel_send.insert((from.clone(), to.clone()), (db, now));
+                        self.send(Command::Send { from, to, db });
+                    }
+                }
             }
             Message::RenameSubmit(id) => {
                 if let Some(name) = self.rename.remove(&id) {
@@ -491,7 +558,7 @@ impl App {
         col = col.push(state_line);
 
         // VU-mètres + fader.
-        let db = self.dragging.get(&x.id).copied().unwrap_or(x.volume_db);
+        let db = self.fader_db(&x.id);
         let channels = x.channels.len().clamp(1, 8);
         let bars: Vec<(f32, f32)> =
             (0..channels).map(|c| self.meters.get(&x.id, c).map(|m| (m.level, m.peak)).unwrap_or((0.0, 0.0))).collect();
@@ -502,6 +569,8 @@ impl App {
             .step(0.1f32)
             .on_release(Message::FaderDone(x.id.clone()))
             .height(Length::Fixed(FADER_H));
+        let wid = x.id.clone();
+        let fader = widget::mouse_area(fader).on_scroll(move |d| Message::Wheel(Wheel::Fader(wid.clone()), d));
         col = col.push(widget::row::with_capacity(2).spacing(10).align_y(Alignment::Center).push(meter).push(fader));
         let db_text = if db <= MIN_DB { "−∞ dB".to_string() } else { format!("{db:+.1} dB") };
         col = col.push(container(text::monotext(db_text)).center_x(Length::Fill));
@@ -629,12 +698,15 @@ impl App {
 
     fn send_menu<'a>(&'a self, from: &'a Strip, to: &'a Strip) -> Element<'a, Message> {
         let key = (from.id.clone(), to.id.clone());
-        let db = self.send_drag.get(&key).copied().or_else(|| from.sends.get(&to.id).copied()).unwrap_or(0.0);
+        let db = self.send_drag.get(&key).copied().unwrap_or_else(|| self.send_db(&from.id, &to.id));
         let (f, t) = (from.id.clone(), to.id.clone());
         let slider = widget::slider(MIN_DB..=MAX_DB, db, move |v| Message::SendLevel(f.clone(), t.clone(), v))
             .step(0.1f32)
             .on_release(Message::SendDone(from.id.clone(), to.id.clone()))
             .width(Length::Fixed(220.0));
+        let (wf, wt) = (from.id.clone(), to.id.clone());
+        let slider =
+            widget::mouse_area(slider).on_scroll(move |d| Message::Wheel(Wheel::Send(wf.clone(), wt.clone()), d));
         let value = if db <= MIN_DB { "−∞ dB".into() } else { format!("{db:+.1} dB") };
         widget::column::with_capacity(5)
             .spacing(8)
@@ -653,7 +725,7 @@ impl App {
 
     fn fx_menu<'a>(&'a self, st: &'a Snapshot, s: &'a StripState) -> Element<'a, Message> {
         let x = &s.strip;
-        let gains = self.eq_drag.get(&x.id).copied().unwrap_or(x.fx.gains);
+        let gains = self.eq_drag.get(&x.id).copied().unwrap_or_else(|| self.eq_gains(&x.id));
         let id = x.id.clone();
         let eq_box = widget::checkbox(x.fx.eq)
             .label("Equalizer")
@@ -666,6 +738,8 @@ impl App {
                     .step(0.5f32)
                     .on_release(Message::EqDone(x.id.clone()))
                     .height(Length::Fixed(120.0));
+            let wid = x.id.clone();
+            let slider = widget::mouse_area(slider).on_scroll(move |d| Message::Wheel(Wheel::Eq(wid.clone(), i), d));
             bands = bands.push(
                 widget::column::with_capacity(3)
                     .spacing(4)
@@ -922,5 +996,31 @@ impl canvas::Program<Message, cosmic::Theme, cosmic::Renderer> for Vu {
             f.fill_rectangle(Point::new(tick_x, y_of(meter_pos_db(db))), Size::new(3.0, 1.0), Color { a: 0.5, ..ink });
         }
         vec![f.into_geometry()]
+    }
+}
+
+/// Une valeur posée à la molette prévaut 600 ms (le temps de l'écho du daemon).
+fn fresh(at: Instant) -> bool {
+    at.elapsed() < Duration::from_millis(600)
+}
+
+/// Crans de molette → dB : `per_notch` par cran (souris), proportionnel au
+/// défilement en pixels (pavé tactile). Vers le haut = plus fort.
+fn wheel_db(delta: mouse::ScrollDelta, per_notch: f32) -> f32 {
+    match delta {
+        mouse::ScrollDelta::Lines { y, .. } => y * per_notch,
+        mouse::ScrollDelta::Pixels { y, .. } => y / 40.0 * per_notch,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wheel_steps() {
+        assert_eq!(wheel_db(mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 }, 1.0), 1.0);
+        assert_eq!(wheel_db(mouse::ScrollDelta::Lines { x: 0.0, y: -2.0 }, 0.5), -1.0);
+        assert_eq!(wheel_db(mouse::ScrollDelta::Pixels { x: 0.0, y: 40.0 }, 1.0), 1.0);
     }
 }

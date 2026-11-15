@@ -4,6 +4,12 @@ All notable changes to VeeMeeter. Versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Mouse wheel on sliders**: scroll over a fader (1 dB per notch), an
+  equalizer band (0.5 dB) or a send level to change it; scrolling elsewhere
+  still scrolls the mixer. Fast notches add up without waiting for the engine.
+
 ### Changed
 
 - **The window is now built with libcosmic**, the toolkit of the COSMIC

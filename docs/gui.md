@@ -25,8 +25,9 @@ window starts it and shows a sleepy Mimi (*Mimi is waking the audio engine up…
 The mixer has an **INPUTS** row and an **OUTPUTS** row. Every strip card has:
 
 Fader
-:   Volume in dB, from −60 (off) to +12. **Drag**, **scroll** over it, or
-    **double-click** to go back to 0 dB.
+:   Volume in dB, from −60 (off) to +12. **Drag** it or **scroll** over it
+    (1 dB per notch); *Reset volume (0 dB)* in the **•••** menu goes back to
+    0 dB. Equalizer bands and send levels scroll too.
 
 VU meter
 :   Peak level per channel.
